@@ -29,21 +29,27 @@ const Exporter = {
   _csv(products) {
     const headers = ['商品名称', '平台', '品类', '店铺', '当前价', '最低价', '最高价',
       '目标价', '购买状态', '规格', '备注', '商品链接', '收藏日期'];
-    const rows = products.map(p => [
-      this._csvEscape(p.name),
-      this._csvEscape((PLATFORM_MAP[p.platform] || {}).label || p.platform),
-      this._csvEscape(p.category),
-      this._csvEscape(p.shop),
-      p.currentPrice || '',
-      p.lowestPrice || '',
-      p.highestPrice || '',
-      p.targetPrice || '',
-      this._csvEscape((PLAN_MAP[p.purchasePlan] || {}).label || ''),
-      this._csvEscape((p.specs || []).join('/')),
-      this._csvEscape(p.specNote),
-      this._csvEscape(p.url),
-      this._csvEscape(formatDate(p.createdAt))
-    ]);
+    const rows = products.map(p => {
+      const specs = (p.specs || []).map(s => {
+        if (typeof s === 'string') return s;
+        return s.note ? `${s.name}(${s.note})` : s.name;
+      }).join('；');
+      return [
+        this._csvEscape(p.name),
+        this._csvEscape((PLATFORM_MAP[p.platform] || {}).label || p.platform),
+        this._csvEscape(p.category),
+        this._csvEscape(p.shop),
+        p.currentPrice || '',
+        p.lowestPrice || '',
+        p.highestPrice || '',
+        p.targetPrice || '',
+        this._csvEscape((PLAN_MAP[p.purchasePlan] || {}).label || ''),
+        this._csvEscape(specs),
+        this._csvEscape(p.specNote),
+        this._csvEscape(p.url),
+        this._csvEscape(formatDate(p.createdAt))
+      ];
+    });
     const bom = '\uFEFF';
     const csv = bom + [headers.map(h => this._csvEscape(h)).join(','),
       ...rows.map(r => r.join(','))].join('\n');

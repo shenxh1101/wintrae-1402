@@ -47,6 +47,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case 'SAVE_SETTINGS':
           await StorageAPI.saveSettings(msg.payload);
+          if (msg.payload.checkIntervalHours !== undefined) {
+            try { await self.rebuildAlarms(); } catch (e) { console.warn('Rebuild alarms failed', e); }
+          }
           sendResponse({ ok: true });
           break;
         case 'MERGE_DUPLICATES':
@@ -194,7 +197,18 @@ async function mergeDuplicates() {
           primary.targetPrice = s.targetPrice || primary.targetPrice;
         }
         if (s.specNote) primary.specNote = (primary.specNote ? primary.specNote + '\n' : '') + s.specNote;
-        if (s.specs && s.specs.length) primary.specs = [...new Set([...(primary.specs || []), ...s.specs])];
+        if (s.specs && s.specs.length) {
+          const existing = new Set((primary.specs || []).map(x => typeof x === 'string' ? x : x.name));
+          const merged = [...(primary.specs || [])];
+          for (const spec of s.specs) {
+            const name = typeof spec === 'string' ? spec : spec.name;
+            if (!existing.has(name)) {
+              merged.push(typeof spec === 'string' ? { name: spec, note: '' } : { name: spec.name, note: spec.note || '' });
+              existing.add(name);
+            }
+          }
+          primary.specs = merged;
+        }
         primary.lowestPrice = Math.min(primary.lowestPrice || Infinity, s.lowestPrice || Infinity);
         primary.highestPrice = Math.max(primary.highestPrice || 0, s.highestPrice || 0);
         merged++;

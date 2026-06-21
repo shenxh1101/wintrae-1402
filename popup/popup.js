@@ -31,35 +31,47 @@ function renderSpecs() {
   list.innerHTML = '';
   state.specs.forEach((spec, idx) => {
     const tag = document.createElement('div');
-    tag.className = 'tag';
-    tag.innerHTML = `<span>${escapeHtml(spec)}</span><button data-idx="${idx}" title="删除">×</button>`;
-    tag.querySelector('button').addEventListener('click', (e) => {
+    tag.className = 'spec-item';
+    tag.innerHTML = `
+      <div class="spec-row">
+        <span class="spec-name">${escapeHtml(spec.name)}</span>
+        <button class="spec-del" data-idx="${idx}" title="删除规格">×</button>
+      </div>
+      <input type="text" class="spec-note-input" placeholder="备注..." data-idx="${idx}" value="${escapeHtml(spec.note || '')}">
+    `;
+    tag.querySelector('.spec-del').addEventListener('click', (e) => {
       state.specs.splice(Number(e.target.dataset.idx), 1);
       renderSpecs();
     });
+    tag.querySelector('.spec-note-input').addEventListener('input', (e) => {
+      state.specs[Number(e.target.dataset.idx)].note = e.target.value;
+    });
     list.appendChild(tag);
-  });
-  const inputTag = document.createElement('div');
-  inputTag.className = 'tag';
-  inputTag.innerHTML = `<input id="newSpecInput" placeholder="添加规格如：M码/黑色...">`;
-  inputTag.querySelector('input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const val = e.target.value.trim();
-      if (val && !state.specs.includes(val)) {
-        state.specs.push(val);
-        renderSpecs();
-      } else {
-        e.target.value = '';
-      }
+  };
+  const addRow = document.createElement('div');
+  addRow.className = 'spec-add-row';
+  addRow.innerHTML = `
+    <input type="text" class="spec-add-input" id="newSpecInput" placeholder="添加规格如：M码/黑色...">
+    <button class="spec-add-btn" id="addSpecBtn" title="添加规格">+ 添加</button>
+  `;
+  const doAdd = () => {
+    const input = addRow.querySelector('.spec-add-input');
+    const val = input.value.trim();
+    if (val && !state.specs.some(s => s.name === val)) {
+      state.specs.push({ name: val, note: '' });
+      renderSpecs();
+    } else {
+      input.value = '';
     }
+  };
+  addRow.querySelector('.spec-add-btn').addEventListener('click', doAdd);
+  addRow.querySelector('.spec-add-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
   });
-  list.appendChild(inputTag);
+  list.appendChild(addRow);
   setTimeout(() => {
-    if (!$('#newSpecInput')) return;
-    if (list.querySelectorAll('.tag').length === 1) {
-      $('#newSpecInput').focus();
-    }
+    const addInput = $('#newSpecInput');
+    if (addInput && state.specs.length === 0) addInput.focus();
   }, 50);
 }
 
@@ -90,10 +102,12 @@ function fillForm(data) {
   if (data.shop) $('#inputShop').value = data.shop;
   if (data.url) $('#inputUrl').value = data.url;
   if (data.specs && data.specs.length) {
-    state.specs = [...data.specs];
+    state.specs = data.specs.map(s => {
+      if (typeof s === 'string') return { name: s, note: '' };
+      return { name: s.name || '', note: s.note || '' };
+    });
     renderSpecs();
   }
-  if (data.specNote) $('#inputSpecNote').value = data.specNote;
   if (data.targetPrice) $('#inputTarget').value = data.targetPrice;
   if (data.purchasePlan) $('#inputPlan').value = data.purchasePlan;
 }
@@ -114,8 +128,7 @@ function collectForm() {
     highestPrice: price,
     shop: $('#inputShop').value.trim(),
     imageUrl: state.extracted?.imageUrl || '',
-    specs: [...state.specs],
-    specNote: $('#inputSpecNote').value.trim(),
+    specs: state.specs.map(s => ({ name: s.name, note: s.note || '' })),
     targetPrice: Number($('#inputTarget').value) || 0,
     purchasePlan: $('#inputPlan').value,
     couponNotify: $('#chkCoupon').checked,
@@ -142,7 +155,6 @@ async function onSave() {
       $('#inputUrl').value = '';
       $('#inputShop').value = '';
       $('#inputTarget').value = '';
-      $('#inputSpecNote').value = '';
       state.specs = [];
       state.editingId = null;
       renderSpecs();
@@ -191,10 +203,6 @@ function gotoPage(name) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderSpecs();
-  $('#addSpecBtn').addEventListener('click', () => {
-    const input = $('#newSpecInput');
-    if (input) input.focus();
-  });
   $('#saveBtn').addEventListener('click', onSave);
   $('#manualFillBtn').addEventListener('click', autoExtract);
   $$('.nav-btn').forEach(b => b.addEventListener('click', () => gotoPage(b.dataset.goto)));

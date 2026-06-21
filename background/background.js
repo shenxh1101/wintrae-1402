@@ -28,24 +28,36 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
     initDemoData();
   }
-  setupAlarms();
+  rebuildAlarms();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  setupAlarms();
+  rebuildAlarms();
 });
 
-function setupAlarms() {
-  chrome.alarms.clearAll(() => {
-    chrome.alarms.create('priceCheck', {
-      periodInMinutes: 6 * 60
-    });
-    chrome.alarms.create('dailyDigest', {
-      when: nextMorning().getTime(),
-      periodInMinutes: 24 * 60
+async function getIntervalHours() {
+  const { settings } = await chrome.storage.local.get('settings');
+  const merged = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  return Number(merged.checkIntervalHours) || 6;
+}
+
+async function rebuildAlarms() {
+  const hours = await getIntervalHours();
+  return new Promise((resolve) => {
+    chrome.alarms.clearAll(() => {
+      chrome.alarms.create('priceCheck', {
+        periodInMinutes: hours * 60
+      });
+      chrome.alarms.create('dailyDigest', {
+        when: nextMorning().getTime(),
+        periodInMinutes: 24 * 60
+      });
+      resolve(hours);
     });
   });
 }
+
+self.rebuildAlarms = rebuildAlarms;
 
 function nextMorning() {
   const d = new Date();
@@ -82,7 +94,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 chrome.notifications.onClicked.addListener((id) => {
-  if (id.startsWith('price_') || id === 'dailyDigest' || id === 'priceAlert') {
+  if (id.startsWith('price_') || id.startsWith('restock_') || id.startsWith('coupon_') || id === 'dailyDigest' || id === 'priceAlert') {
     chrome.tabs.create({ url: chrome.runtime.getURL('pages/favorites.html') });
   }
   chrome.notifications.clear(id);
@@ -98,6 +110,11 @@ async function checkAllPrices() {
       const result = await simulatePriceCheck(product);
       const oldPrice = product.currentPrice;
       const newPrice = result.price;
+      const wasInStock = product.inStock !== false;
+      const hadCoupon = !!product.hasCoupon;
+      const isInStock = !!result.inStock;
+      const hasCoupon = !!result.hasCoupon;
+
       if (newPrice && newPrice !== oldPrice) {
         const deltaPct = ((newPrice - oldPrice) / oldPrice) * 100;
         const spikeThresh = Number(s.priceSpikeThreshold) || 15;
@@ -112,28 +129,57 @@ async function checkAllPrices() {
         }
         await addPriceHistory(product.id, newPrice, deltaPct < 0 ? 'drop' : deltaPct > spikeThresh ? 'spike' : 'auto');
         let shouldNotify = false;
+        let notifyTitle = '';
         let notifyMsg = '';
         if (product.targetPrice && newPrice <= product.targetPrice && product.priceDropNotify) {
           shouldNotify = true;
-          notifyMsg = `${product.name.substring(0, 20)}已达目标价 ¥${newPrice} (目标 ¥${product.targetPrice})`;
+          notifyTitle = '🎯 目标价已到达';
+          notifyMsg = `${product.name.substring(0, 20)} 已达目标价 ¥${newPrice} (目标 ¥${product.targetPrice})`;
         } else if (deltaPct <= -dropThresh && product.priceDropNotify) {
           shouldNotify = true;
-          notifyMsg = `${product.name.substring(0, 20)}降价 ${Math.abs(deltaPct).toFixed(1)}%，现价 ¥${newPrice}`;
+          notifyTitle = '📉 好消息！商品降价';
+          notifyMsg = `${product.name.substring(0, 20)} 降价 ${Math.abs(deltaPct).toFixed(1)}%，现价 ¥${newPrice}`;
         } else if (deltaPct >= spikeThresh) {
           shouldNotify = true;
-          notifyMsg = `${product.name.substring(0, 20)}异常涨价 ${deltaPct.toFixed(1)}%，现价 ¥${newPrice}`;
+          notifyTitle = '⚠️ 价格异常提醒';
+          notifyMsg = `${product.name.substring(0, 20)} 异常涨价 ${deltaPct.toFixed(1)}%，现价 ¥${newPrice}`;
         }
         if (shouldNotify) {
           notifiedCount++;
           showNotification(`price_${product.id}`, {
             type: 'basic',
             iconUrl: '../icons/icon128.png',
-            title: deltaPct < 0 ? '好消息！商品降价' : deltaPct >= spikeThresh ? '价格异常提醒' : '目标价已到达',
+            title: notifyTitle,
             message: notifyMsg,
             priority: 2
           });
         }
       }
+
+      if (!wasInStock && isInStock && product.restockNotify) {
+        notifiedCount++;
+        showNotification(`restock_${product.id}`, {
+          type: 'basic',
+          iconUrl: '../icons/icon128.png',
+          title: '📦 补货通知',
+          message: `${product.name.substring(0, 20)} 已补货，快去看看吧`,
+          priority: 2
+        });
+      }
+      product.inStock = isInStock;
+
+      if (!hadCoupon && hasCoupon && product.couponNotify) {
+        notifiedCount++;
+        showNotification(`coupon_${product.id}`, {
+          type: 'basic',
+          iconUrl: '../icons/icon128.png',
+          title: '🎟️ 有新优惠券',
+          message: `${product.name.substring(0, 20)} 有新的优惠券可以使用`,
+          priority: 1
+        });
+      }
+      product.hasCoupon = hasCoupon;
+
     } catch (e) {
       console.warn('Price check failed for', product.name, e);
     }
@@ -149,7 +195,12 @@ async function simulatePriceCheck(product) {
   if (seed < 20) factor = 1 - (Math.random() * 0.25);
   else if (seed < 30) factor = 1 + (Math.random() * 0.2);
   else factor = 1 + (Math.random() * 0.06 - 0.03);
-  return { price: Number((oldPrice * factor).toFixed(2)), inStock: true, hasCoupon: seed > 70 };
+  const price = Number((oldPrice * factor).toFixed(2));
+  const stockRand = Math.random();
+  const couponRand = Math.random();
+  const inStock = product.inStock === false ? stockRand > 0.35 : stockRand > 0.12;
+  const hasCoupon = product.hasCoupon ? couponRand > 0.4 : couponRand > 0.75;
+  return { price, inStock, hasCoupon };
 }
 
 async function computeDailySummary() {
@@ -189,7 +240,11 @@ async function initDemoData() {
       highestPrice: 1699,
       shop: 'Apple 产品京东自营旗舰店',
       imageUrl: '',
-      specs: ['USB-C 充电盒', '主动降噪', '通透模式'],
+      specs: [
+        { name: 'USB-C 充电盒', note: '适配 MacBook 用 C to C 线' },
+        { name: '主动降噪', note: '地铁通勤降噪效果明显' },
+        { name: '通透模式', note: '过马路时能听到环境音更安全' }
+      ],
       specNote: '想买给通勤使用的，需要 USB-C 版本适配 MacBook',
       targetPrice: 1350,
       purchasePlan: 'want',
@@ -210,7 +265,11 @@ async function initDemoData() {
       highestPrice: 6499,
       shop: '小米官方旗舰店',
       imageUrl: '',
-      specs: ['16GB+512GB', '黑色', '陶瓷后盖'],
+      specs: [
+        { name: '16GB+512GB', note: '存储够大，拍视频不用删' },
+        { name: '黑色', note: '经典配色，耐脏' },
+        { name: '陶瓷后盖', note: '手感好但易沾指纹' }
+      ],
       specNote: '等618或双十一降价，考虑换手机',
       targetPrice: 5999,
       purchasePlan: 'cart',
@@ -231,7 +290,11 @@ async function initDemoData() {
       highestPrice: 599,
       shop: '优衣库官方旗舰店',
       imageUrl: '',
-      specs: ['藏青色', 'L码', '连帽款'],
+      specs: [
+        { name: '藏青色', note: '百搭耐脏，深色显瘦' },
+        { name: 'L码', note: '身高175体重68穿L刚好' },
+        { name: '连帽款', note: '风大的时候能戴帽子' }
+      ],
       specNote: '身高175 体重68，去年的有点旧了',
       targetPrice: 349,
       purchasePlan: 'want',
@@ -252,7 +315,10 @@ async function initDemoData() {
       highestPrice: 4490,
       shop: '戴森京东自营官方旗舰店',
       imageUrl: '',
-      specs: ['V12 Detect Slim', '标准版'],
+      specs: [
+        { name: 'V12 Detect Slim', note: '轻量款适合女士和老人' },
+        { name: '标准版', note: '带激光灰尘探测功能' }
+      ],
       specNote: '家有猫毛必备，预算最好4000以内',
       targetPrice: 3999,
       purchasePlan: 'want',
@@ -273,7 +339,11 @@ async function initDemoData() {
       highestPrice: 119,
       shop: '三只松鼠官方旗舰店',
       imageUrl: '',
-      specs: ['750g 装', '30小包', '混合款'],
+      specs: [
+        { name: '750g 装', note: '一个月的量刚好' },
+        { name: '30小包', note: '每天一包方便携带' },
+        { name: '混合款', note: '有坚果有果干，营养均衡' }
+      ],
       specNote: '',
       targetPrice: 69,
       purchasePlan: 'cart',
@@ -294,7 +364,11 @@ async function initDemoData() {
       highestPrice: 1399,
       shop: '亚马逊官方',
       imageUrl: '',
-      specs: ['黑色', '16GB', '无广告版'],
+      specs: [
+        { name: '黑色', note: '黑边屏幕一体感强' },
+        { name: '16GB', note: '存几百本书够用了' },
+        { name: '无广告版', note: '贵一点但体验好' }
+      ],
       specNote: '已买，买成999元，留着比价记录',
       targetPrice: 0,
       purchasePlan: 'bought',

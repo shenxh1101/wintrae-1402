@@ -41,12 +41,20 @@ function applyFilters() {
   }
   if (state.filters.search) {
     const q = state.filters.search.toLowerCase();
-    list = list.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      (p.shop || '').toLowerCase().includes(q) ||
-      (p.category || '').toLowerCase().includes(q) ||
-      (p.specNote || '').toLowerCase().includes(q)
-    );
+    list = list.filter(p => {
+      if (p.name.toLowerCase().includes(q)) return true;
+      if ((p.shop || '').toLowerCase().includes(q)) return true;
+      if ((p.category || '').toLowerCase().includes(q)) return true;
+      if ((p.specNote || '').toLowerCase().includes(q)) return true;
+      if (p.specs && p.specs.length) {
+        for (const s of p.specs) {
+          const name = typeof s === 'string' ? s : s.name;
+          const note = typeof s === 'string' ? '' : (s.note || '');
+          if (name.toLowerCase().includes(q) || note.toLowerCase().includes(q)) return true;
+        }
+      }
+      return false;
+    });
   }
   state.filtered = list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
@@ -168,9 +176,23 @@ function renderGrid() {
           </div>
           ${(p.specs && p.specs.length) ? `
             <div class="product-card-specs">
-              ${p.specs.slice(0, 4).map(s => `<span class="product-spec-tag">${escapeHtml(s)}</span>`).join('')}
+              ${p.specs.slice(0, 4).map(s => {
+                const name = typeof s === 'string' ? s : s.name;
+                const note = typeof s === 'string' ? '' : (s.note || '');
+                return `<span class="product-spec-tag" title="${note ? escapeHtml(note) : escapeHtml(name)}">${escapeHtml(name)}</span>`;
+              }).join('')}
               ${p.specs.length > 4 ? `<span class="product-spec-tag">+${p.specs.length - 4}</span>` : ''}
             </div>
+            ${p.specs.some(s => typeof s === 'object' && s.note) ? `
+              <div class="product-spec-notes">
+                ${p.specs.filter(s => typeof s === 'object' && s.note).slice(0, 2).map(s => `
+                  <div class="spec-note-line">
+                    <span class="spec-note-name">${escapeHtml(s.name)}</span>
+                    <span class="spec-note-text">${escapeHtml(s.note)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
           ` : (p.specNote ? `<div style="font-size:11px;color:#64748b;line-height:1.5;background:#f8fafc;padding:6px 8px;border-radius:6px;">📝 ${escapeHtml(p.specNote.substring(0, 50))}</div>` : '')}
           <div class="product-price-row">
             <div class="price-main">
@@ -291,10 +313,16 @@ function attachTopActions() {
   $('#newBtn').addEventListener('click', () => openModal());
   $('#emptyAddBtn').addEventListener('click', () => openModal());
   $('#checkNowBtn').addEventListener('click', async () => {
-    showToast('🔍 正在检测价格...');
+    showToast('🔍 正在检测价格，请稍候...');
     const r = await sendMsg('TRIGGER_CHECK');
-    if (r.ok && r.data) showToast(`完成！检测到 ${r.data.notifiedCount || 0} 个变化`);
-    loadProducts();
+    await loadProducts();
+    if (r.ok && r.data) {
+      const checked = r.data.checkedCount || 0;
+      const notified = r.data.notifiedCount || 0;
+      showToast(`✅ 检测完成，共检测 ${checked} 件商品，${notified} 个价格变化提醒`);
+    } else {
+      showToast('检测完成', 'warn');
+    }
   });
 
   $('#batchArchive').addEventListener('click', async () => {
@@ -334,6 +362,18 @@ function openModal(product = null) {
   $('#mShop').value = product?.shop || '';
   $('#mCategory').value = product?.category || '';
   $('#mNote').value = product?.specNote || '';
+  
+  const specsEl = $('#mSpecs');
+  if (product && product.specs && product.specs.length) {
+    specsEl.innerHTML = product.specs.map(s => {
+      const name = typeof s === 'string' ? s : s.name;
+      const note = typeof s === 'string' ? '' : (s.note || '');
+      return `<span class="product-spec-tag" title="${note ? escapeHtml(note) : escapeHtml(name)}">${escapeHtml(name)}${note ? ` · ${escapeHtml(note)}` : ''}</span>`;
+    }).join('');
+  } else {
+    specsEl.innerHTML = '<span style="font-size:12px;color:#94a3b8;">暂无规格</span>';
+  }
+  
   $('#productModal').classList.add('show');
   setTimeout(() => $('#mName').focus(), 100);
 }
@@ -354,7 +394,6 @@ async function saveModal() {
     shop: $('#mShop').value.trim(),
     category: $('#mCategory').value.trim() || '其他',
     specNote: $('#mNote').value.trim(),
-    specs: [],
     priceDropNotify: true,
     couponNotify: false,
     restockNotify: false
@@ -369,6 +408,7 @@ async function saveModal() {
   } else {
     payload.lowestPrice = price;
     payload.highestPrice = price;
+    payload.specs = [];
     const r = await sendMsg('ADD_PRODUCT', { payload });
     if (r.ok) showToast('✅ 已添加');
     else showToast('添加失败：' + (r.error || ''), 'error');

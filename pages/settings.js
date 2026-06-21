@@ -77,6 +77,16 @@ function renderTargetList() {
             ${p.lowestPrice && p.lowestPrice < p.currentPrice ? `<span style="color:#10b981;">最低 ¥${Number(p.lowestPrice).toFixed(2)}</span>` : ''}
             ${hit ? `<span style="color:#10b981;font-weight:700;">🎯 已到目标价</span>` : ''}
           </div>
+          ${p.specs && p.specs.length ? `
+            <div class="sp-specs">
+              ${p.specs.slice(0, 3).map(s => {
+                const name = typeof s === 'string' ? s : s.name;
+                const note = typeof s === 'string' ? '' : (s.note || '');
+                return `<span class="sp-spec-tag" title="${note ? escapeHtml(note) : escapeHtml(name)}">${escapeHtml(name)}${note ? ` · ${escapeHtml(note)}` : ''}</span>`;
+              }).join('')}
+              ${p.specs.length > 3 ? `<span class="sp-spec-tag">+${p.specs.length - 3}</span>` : ''}
+            </div>
+          ` : ''}
         </div>
         <div style="display:flex; align-items:center; gap: 10px; flex-shrink:0;">
           <label class="switch" title="开启降价提醒">
@@ -149,7 +159,18 @@ function attachDragMerge() {
       const primary = (a.createdAt || 0) > (b.createdAt || 0) ? a : b;
       const secondary = primary === a ? b : a;
       if (secondary.specNote) primary.specNote = (primary.specNote ? primary.specNote + '\n' : '') + secondary.specNote;
-      if (secondary.specs && secondary.specs.length) primary.specs = [...new Set([...(primary.specs || []), ...secondary.specs])];
+      if (secondary.specs && secondary.specs.length) {
+        const existing = new Set((primary.specs || []).map(s => typeof s === 'string' ? s : s.name));
+        const merged = [...(primary.specs || [])];
+        for (const s of secondary.specs) {
+          const name = typeof s === 'string' ? s : s.name;
+          if (!existing.has(name)) {
+            merged.push(typeof s === 'string' ? { name: s, note: '' } : { name: s.name, note: s.note || '' });
+            existing.add(name);
+          }
+        }
+        primary.specs = merged;
+      }
       primary.lowestPrice = Math.min(primary.lowestPrice || Infinity, secondary.lowestPrice || Infinity);
       primary.highestPrice = Math.max(primary.highestPrice || 0, secondary.highestPrice || 0);
       if (!primary.targetPrice || (secondary.targetPrice && secondary.targetPrice < primary.targetPrice)) primary.targetPrice = secondary.targetPrice || primary.targetPrice;

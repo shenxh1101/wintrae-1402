@@ -145,10 +145,30 @@ function renderInfo() {
     { label: '更新时间', value: formatDate(p.updatedAt || p.createdAt) },
     { label: '商品链接', value: p.url ? `<a href="${escapeHtml(p.url)}" target="_blank" style="color:#0d9488;text-decoration:underline;">打开链接 →</a>` : `<span style="color:#94a3b8;">无</span>` }
   ];
-  if (p.specs && p.specs.length) items.push({
-    label: '规格',
-    value: p.specs.map(s => `<span style="padding:2px 8px;background:#f1f5f9;border-radius:6px;font-size:11px;color:#475569;margin:2px 4px 2px 0;display:inline-block;">${escapeHtml(s)}</span>`).join('')
-  });
+  if (p.specs && p.specs.length) {
+    const hasNotes = p.specs.some(s => typeof s === 'object' && s.note);
+    if (hasNotes) {
+      const specHtml = p.specs.map(s => {
+        const name = typeof s === 'string' ? s : s.name;
+        const note = typeof s === 'string' ? '' : (s.note || '');
+        return `
+          <div class="spec-detail-item">
+            <span class="spec-detail-name">${escapeHtml(name)}</span>
+            ${note ? `<span class="spec-detail-note">${escapeHtml(note)}</span>` : ''}
+          </div>
+        `;
+      }).join('');
+      items.push({ label: '规格与备注', value: `<div class="spec-detail-list">${specHtml}</div>` });
+    } else {
+      items.push({
+        label: '规格',
+        value: p.specs.map(s => {
+          const name = typeof s === 'string' ? s : s.name;
+          return `<span style="padding:2px 8px;background:#f1f5f9;border-radius:6px;font-size:11px;color:#475569;margin:2px 4px 2px 0;display:inline-block;">${escapeHtml(name)}</span>`;
+        }).join('')
+      });
+    }
+  }
   if (p.specNote) items.push({ label: '备注', value: escapeHtml(p.specNote).replace(/\n/g, '<br>') });
   $('#infoList').innerHTML = items.map(i => `
     <div class="info-item">
@@ -210,10 +230,15 @@ function attachActions() {
     if (i.dataset.nav === 'settings') openPage('settings');
   }));
   $('#refreshBtn').addEventListener('click', async () => {
-    showToast('🔄 正在刷新价格...');
+    showToast('🔄 正在刷新价格，请稍候...');
     const r = await sendMsg('TRIGGER_CHECK');
     await loadData();
-    showToast(r.ok ? '价格已更新' : '刷新完成');
+    if (r.ok && r.data) {
+      const notified = r.data.notifiedCount || 0;
+      showToast(notified > 0 ? `✅ 刷新完成，检测到 ${notified} 个变化` : '✅ 刷新完成，价格暂无变动');
+    } else {
+      showToast('刷新完成', 'warn');
+    }
   });
   $('#openBuyBtn').addEventListener('click', () => {
     if (state.product.url) {
