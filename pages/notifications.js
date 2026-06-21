@@ -48,6 +48,31 @@ function renderStats() {
   }
 }
 
+function getNotificationPriceInfo(item, meta) {
+  if (!item.extra) return '';
+  const parts = [];
+  if (item.extra.oldPrice !== undefined && item.extra.newPrice !== undefined && item.extra.oldPrice !== item.extra.newPrice) {
+    parts.push(`
+      <span class="np-old">当时 ¥${Number(item.extra.oldPrice).toFixed(2)}</span>
+      <span class="np-arrow">→</span>
+      <span class="np-new" style="color:${meta.color};">触发 ¥${Number(item.extra.newPrice).toFixed(2)}</span>
+      ${item.extra.deltaPct !== undefined ? `<span class="np-delta" style="background:${meta.bg};color:${meta.color};">${item.extra.deltaPct > 0 ? '+' : ''}${item.extra.deltaPct.toFixed(1)}%</span>` : ''}
+    `);
+  } else if (item.extra.newPrice !== undefined) {
+    parts.push(`<span class="np-new" style="color:${meta.color};">触发价 ¥${Number(item.extra.newPrice).toFixed(2)}</span>`);
+  }
+  if (item.extra.targetPrice) {
+    parts.push(`<span class="np-target">🎯 目标 ¥${Number(item.extra.targetPrice).toFixed(2)}</span>`);
+  }
+  if (item.extra.couponValue) {
+    parts.push(`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:#faf5ff;color:#8b5cf6;border-radius:4px;font-size:10.5px;font-weight:600;">🎟️ 券 ¥${Number(item.extra.couponValue).toFixed(0)}</span>`);
+  }
+  if (item.extra.restockInfo) {
+    parts.push(`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:#f0fdfa;color:#0d9488;border-radius:4px;font-size:10.5px;font-weight:600;">📦 ${escapeHtml(item.extra.restockInfo)}</span>`);
+  }
+  return parts.length ? `<div class="notif-prices">${parts.join('')}</div>` : '';
+}
+
 function renderList() {
   const list = applyFilter();
   const container = $('#notifList');
@@ -60,19 +85,9 @@ function renderList() {
   empty.style.display = 'none';
   container.innerHTML = list.map(item => {
     const meta = NOTIF_META[item.type] || { label: '通知', emoji: '🔔', color: '#0d9488', bg: '#f0fdfa' };
-    const priceInfo = item.extra && item.extra.oldPrice !== undefined ? `
-      <div class="notif-prices">
-        ${item.extra.oldPrice !== item.extra.newPrice ? `
-          <span class="np-old">原价 ¥${Number(item.extra.oldPrice).toFixed(2)}</span>
-          <span class="np-arrow">→</span>
-          <span class="np-new" style="color:${meta.color};">现价 ¥${Number(item.extra.newPrice).toFixed(2)}</span>
-          <span class="np-delta" style="background:${meta.bg};color:${meta.color};">${item.extra.deltaPct !== undefined ? (item.extra.deltaPct > 0 ? '+' : '') + item.extra.deltaPct.toFixed(1) + '%' : ''}</span>
-        ` : ''}
-        ${item.extra.targetPrice ? `<span class="np-target">🎯 目标 ¥${Number(item.extra.targetPrice).toFixed(2)}</span>` : ''}
-      </div>
-    ` : '';
+    const priceInfo = getNotificationPriceInfo(item, meta);
     return `
-      <div class="notif-card ${item.read ? 'read' : 'unread'}" data-id="${escapeHtml(item.id)}" data-pid="${escapeHtml(item.productId)}">
+      <div class="notif-card ${item.read ? 'read' : 'unread'}" data-id="${escapeHtml(item.id)}" data-pid="${escapeHtml(item.productId)}" data-ts="${item.createdAt}" data-type="${item.type}">
         <div class="notif-icon" style="background:${meta.bg};color:${meta.color};">
           ${meta.emoji}
         </div>
@@ -80,7 +95,7 @@ function renderList() {
           <div class="notif-top">
             <span class="notif-type" style="color:${meta.color};background:${meta.bg};">${meta.label}</span>
             <span class="notif-time">${formatDateTime(item.createdAt)}</span>
-            ${!item.read ? '<span class="notif-dot"></span>' : ''}
+            ${!item.read ? '<span class="notif-dot" title="未读"></span>' : '<span style="font-size:10px;color:#94a3b8;margin-left:auto;">已读</span>'}
           </div>
           <h4 class="notif-title">${escapeHtml(item.title)}</h4>
           <p class="notif-msg">${escapeHtml(item.message)}</p>
@@ -91,10 +106,13 @@ function renderList() {
           </div>
         </div>
         <div class="notif-actions">
-          <button class="notif-btn" data-action="read" title="${item.read ? '已读' : '标为已读'}">
+          <button class="notif-btn" data-action="read" title="${item.read ? '标记未读' : '标为已读'}">
             ${item.read ? '✓' : '📖'}
           </button>
-          <button class="notif-btn" data-action="open" title="查看商品">
+          <button class="notif-btn" data-action="chart" title="查看价格曲线（定位到触发点）">
+            📈
+          </button>
+          <button class="notif-btn" data-action="buy" title="去购买">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M15 3h6v6 M10 14 L21 3 M21 14v7H3V3h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
@@ -105,10 +123,12 @@ function renderList() {
   $$('.notif-card').forEach(card => {
     const id = card.dataset.id;
     const pid = card.dataset.pid;
+    const ts = Number(card.dataset.ts);
+    const type = card.dataset.type;
     card.addEventListener('click', async (e) => {
       if (e.target.closest('[data-action]')) return;
       await sendMsg('MARK_NOTIF_READ', { id });
-      openChart(pid);
+      openChart(pid, id, ts, type);
     });
     const btns = card.querySelectorAll('[data-action]');
     btns.forEach(btn => {
@@ -116,21 +136,37 @@ function renderList() {
         e.stopPropagation();
         const action = btn.dataset.action;
         if (action === 'read') {
-          await sendMsg('MARK_NOTIF_READ', { id });
+          const item = state.records.find(x => x.id === id);
+          if (item) {
+            if (item.read) await sendMsg('MARK_NOTIF_UNREAD', { id });
+            else await sendMsg('MARK_NOTIF_READ', { id });
+          }
           loadData();
-        } else if (action === 'open') {
+        } else if (action === 'chart') {
           await sendMsg('MARK_NOTIF_READ', { id });
-          openChart(pid);
+          openChart(pid, id, ts, type);
+        } else if (action === 'buy') {
+          await sendMsg('MARK_NOTIF_READ', { id });
+          const productR = await sendMsg('GET_PRODUCTS');
+          const product = productR.ok ? (productR.data || []).find(p => p.id === pid) : null;
+          if (product && product.url) {
+            chrome.tabs ? chrome.tabs.create({ url: product.url }) : window.open(product.url);
+          } else {
+            openChart(pid, id, ts, type);
+          }
         }
       });
     });
   });
 }
 
-function openChart(productId, timestamp) {
+function openChart(productId, notifId, timestamp, type) {
   if (!productId) { showToast('商品不存在', 'warn'); return; }
-  const param = timestamp ? `productId=${encodeURIComponent(productId)}&t=${timestamp}` : `productId=${encodeURIComponent(productId)}`;
-  openPage('chart', param);
+  const params = new URLSearchParams({ productId: encodeURIComponent(productId) });
+  if (notifId) params.set('notifId', notifId);
+  if (timestamp) params.set('t', timestamp);
+  if (type) params.set('src', type);
+  openPage('chart', params.toString());
 }
 
 function getGroupedData() {
@@ -213,19 +249,9 @@ function renderGroupedView() {
     const records = group.records.sort((a, b) => b.createdAt - a.createdAt);
     const recordItems = records.map(item => {
       const meta = NOTIF_META[item.type] || { label: '通知', emoji: '🔔', color: '#0d9488', bg: '#f0fdfa' };
-      const priceInfo = item.extra && item.extra.oldPrice !== undefined ? `
-        <div class="notif-prices">
-          ${item.extra.oldPrice !== item.extra.newPrice ? `
-            <span class="np-old">原价 ¥${Number(item.extra.oldPrice).toFixed(2)}</span>
-            <span class="np-arrow">→</span>
-            <span class="np-new" style="color:${meta.color};">现价 ¥${Number(item.extra.newPrice).toFixed(2)}</span>
-            <span class="np-delta" style="background:${meta.bg};color:${meta.color};">${item.extra.deltaPct !== undefined ? (item.extra.deltaPct > 0 ? '+' : '') + item.extra.deltaPct.toFixed(1) + '%' : ''}</span>
-          ` : ''}
-          ${item.extra.targetPrice ? `<span class="np-target">🎯 目标 ¥${Number(item.extra.targetPrice).toFixed(2)}</span>` : ''}
-        </div>
-      ` : '';
+      const priceInfo = getNotificationPriceInfo(item, meta);
       return `
-        <div class="notif-card ${item.read ? 'read' : 'unread'}" data-id="${escapeHtml(item.id)}" data-pid="${escapeHtml(item.productId)}" style="margin-left:32px;border-left:3px solid ${meta.bg};">
+        <div class="notif-card ${item.read ? 'read' : 'unread'}" data-id="${escapeHtml(item.id)}" data-pid="${escapeHtml(item.productId)}" data-ts="${item.createdAt}" data-type="${item.type}" style="margin-left:32px;border-left:3px solid ${meta.bg};">
           <div class="notif-icon" style="background:${meta.bg};color:${meta.color};">
             ${meta.emoji}
           </div>
@@ -233,18 +259,21 @@ function renderGroupedView() {
             <div class="notif-top">
               <span class="notif-type" style="color:${meta.color};background:${meta.bg};">${meta.label}</span>
               <span class="notif-time">${formatDateTime(item.createdAt)}</span>
-              ${!item.read ? '<span class="notif-dot"></span>' : ''}
+              ${!item.read ? '<span class="notif-dot"></span>' : '<span style="font-size:10px;color:#94a3b8;margin-left:auto;">已读</span>'}
             </div>
             <h4 class="notif-title">${escapeHtml(item.title)}</h4>
             <p class="notif-msg">${escapeHtml(item.message)}</p>
             ${priceInfo}
           </div>
           <div class="notif-actions">
-            <button class="notif-btn" data-action="read" title="${item.read ? '已读' : '标为已读'}">
+            <button class="notif-btn" data-action="read" title="${item.read ? '标记未读' : '标为已读'}">
               ${item.read ? '✓' : '📖'}
             </button>
-            <button class="notif-btn" data-action="chart" title="查看价格曲线">
+            <button class="notif-btn" data-action="chart" title="查看价格曲线（定位到触发点）">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3 3v18h18 M7 14l4-4 4 4 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="notif-btn" data-action="buy" title="去购买">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M15 3h6v6 M10 14 L21 3 M21 14v7H3V3h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
         </div>
@@ -274,24 +303,37 @@ function renderGroupedView() {
   $$('#notifList .notif-card[data-id]').forEach(card => {
     const id = card.dataset.id;
     const pid = card.dataset.pid;
+    const ts = Number(card.dataset.ts);
+    const type = card.dataset.type;
     card.addEventListener('click', async (e) => {
       if (e.target.closest('[data-action]')) return;
-      const item = state.records.find(x => x.id === id);
       await sendMsg('MARK_NOTIF_READ', { id });
-      openChart(pid, item ? item.createdAt : null);
+      openChart(pid, id, ts, type);
     });
     const btns = card.querySelectorAll('[data-action]');
     btns.forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const action = btn.dataset.action;
-        const item = state.records.find(x => x.id === id);
         if (action === 'read') {
-          await sendMsg('MARK_NOTIF_READ', { id });
+          const item = state.records.find(x => x.id === id);
+          if (item) {
+            if (item.read) await sendMsg('MARK_NOTIF_UNREAD', { id });
+            else await sendMsg('MARK_NOTIF_READ', { id });
+          }
           loadData();
         } else if (action === 'chart') {
           await sendMsg('MARK_NOTIF_READ', { id });
-          openChart(pid, item ? item.createdAt : null);
+          openChart(pid, id, ts, type);
+        } else if (action === 'buy') {
+          await sendMsg('MARK_NOTIF_READ', { id });
+          const productR = await sendMsg('GET_PRODUCTS');
+          const product = productR.ok ? (productR.data || []).find(p => p.id === pid) : null;
+          if (product && product.url) {
+            chrome.tabs ? chrome.tabs.create({ url: product.url }) : window.open(product.url);
+          } else {
+            openChart(pid, id, ts, type);
+          }
         }
       });
     });

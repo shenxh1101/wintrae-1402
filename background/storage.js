@@ -47,6 +47,20 @@ const StorageAPI = {
     await this.saveGroupPrefs(prefs);
     return prefs;
   },
+  async getExcludedProducts(groupName) {
+    const prefs = await this.getGroupPrefs();
+    return prefs[groupName]?.excludedProducts || [];
+  },
+  async toggleExcludedProduct(groupName, productId) {
+    const prefs = await this.getGroupPrefs();
+    const current = (prefs[groupName]?.excludedProducts || []);
+    const newList = current.includes(productId)
+      ? current.filter(id => id !== productId)
+      : [...current, productId];
+    prefs[groupName] = { ...(prefs[groupName] || {}), excludedProducts: newList };
+    await this.saveGroupPrefs(prefs);
+    return newList;
+  },
   async addProduct(product) {
     const list = await this.getProducts();
     const idx = list.findIndex(p => p.id === product.id);

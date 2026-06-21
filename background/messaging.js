@@ -69,6 +69,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (self.Notifier) await self.Notifier.markRead(msg.id);
           sendResponse({ ok: true });
           break;
+        case 'MARK_NOTIF_UNREAD':
+          if (self.Notifier) await self.Notifier.markUnread(msg.id);
+          sendResponse({ ok: true });
+          break;
         case 'MARK_NOTIF_ALL_READ':
           if (self.Notifier) await self.Notifier.markAllRead();
           sendResponse({ ok: true });
@@ -102,6 +106,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (self.StorageAPI) {
             await self.StorageAPI.setGroupSort(msg.groupName, msg.sortBy);
             sendResponse({ ok: true });
+          } else sendResponse({ ok: false });
+          break;
+        case 'GET_EXCLUDED_PRODUCTS':
+          sendResponse({ ok: true, data: await (self.StorageAPI ? self.StorageAPI.getExcludedProducts(msg.groupName) : []) });
+          break;
+        case 'TOGGLE_EXCLUDED_PRODUCT':
+          if (self.StorageAPI) {
+            const r = await self.StorageAPI.toggleExcludedProduct(msg.groupName, msg.productId);
+            sendResponse({ ok: true, data: r });
           } else sendResponse({ ok: false });
           break;
         case 'EXTRACT_FROM_PAGE': {

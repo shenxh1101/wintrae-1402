@@ -105,6 +105,14 @@ self.Notifier = {
       if (item) { item.read = true; await chrome.storage.local.set({ notificationRecords: list }); }
     } catch (e) {}
   },
+  async markUnread(id) {
+    try {
+      const r = await chrome.storage.local.get('notificationRecords');
+      const list = r.notificationRecords || [];
+      const item = list.find(x => x.id === id);
+      if (item) { item.read = false; await chrome.storage.local.set({ notificationRecords: list }); }
+    } catch (e) {}
+  },
   async markAllRead() {
     try {
       const r = await chrome.storage.local.get('notificationRecords');

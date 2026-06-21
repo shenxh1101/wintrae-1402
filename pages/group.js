@@ -5,7 +5,10 @@ const state = {
   bestProduct: null,
   avgPrice: 0,
   sortBy: 'currentPrice',
-  preferredProductId: null
+  preferredProductId: null,
+  excludedProducts: [],
+  recommendedProduct: null,
+  recommendReasons: []
 };
 
 const LINE_COLORS = ['#0d9488', '#0891b2', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981', '#6366f1'];
@@ -47,6 +50,87 @@ function sortProducts(products, sortBy) {
   return sorted;
 }
 
+function generateRecommendation() {
+  const candidates = state.products.filter(p => !state.excludedProducts.includes(p.id));
+  if (!candidates.length) {
+    state.recommendedProduct = null;
+    state.recommendReasons = [];
+    return;
+  }
+
+  let best = null;
+  let bestScore = -Infinity;
+  const reasons = [];
+
+  for (const p of candidates) {
+    let score = 0;
+    const productReasons = [];
+
+    if (p.id === state.preferredProductId) {
+      score += 50;
+      productReasons.push('⭐ 已设为首选购买入口');
+    }
+
+    const isLowest = p.id === state.bestProduct?.id;
+    if (isLowest) {
+      score += 40;
+      productReasons.push('💰 当前最低价');
+    }
+
+    const lowestEver = Number(p.lowestPrice || p.currentPrice);
+    const current = Number(p.currentPrice);
+    if (current <= lowestEver) {
+      score += 30;
+      productReasons.push('📉 历史最低价，入手好时机');
+    } else {
+      const dropFromHigh = p.highestPrice ? ((Number(p.highestPrice) - current) / Number(p.highestPrice)) * 100 : 0;
+      if (dropFromHigh > 10) {
+        score += 20;
+        productReasons.push(`📉 较历史高点便宜 ${dropFromHigh.toFixed(1)}%`);
+      }
+    }
+
+    if (p.targetPrice && current <= Number(p.targetPrice)) {
+      score += 35;
+      productReasons.push('🎯 已达到目标价，可出手');
+    } else if (p.targetPrice) {
+      const gapToTarget = ((Number(p.targetPrice) - current) / current) * 100;
+      if (gapToTarget < 5) {
+        score += 15;
+        productReasons.push(`🎯 距目标价还差 ${gapToTarget.toFixed(1)}%，接近入手点`);
+      } else if (gapToTarget < 10) {
+        score += 8;
+        productReasons.push(`🎯 距目标价还差 ${gapToTarget.toFixed(1)}%，可以观望`);
+      }
+    }
+
+    if (!p.lowestPrice || current === Number(p.lowestPrice)) {
+      score += 15;
+      productReasons.push('✨ 价格处于历史低位');
+    }
+
+    const hist = state.histories[p.id] || [];
+    if (hist.length >= 10) {
+      const recent = hist.slice(-10);
+      const avgRecent = recent.reduce((s, h) => s + h.price, 0) / recent.length;
+      if (current < avgRecent * 0.95) {
+        score += 10;
+        productReasons.push('📊 近期走势向下，价格处于低位');
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+      reasons.length = 0;
+      reasons.push(...productReasons);
+    }
+  }
+
+  state.recommendedProduct = best;
+  state.recommendReasons = reasons;
+}
+
 async function loadData() {
   const name = parseParams();
   if (!name) {
@@ -65,6 +149,7 @@ async function loadData() {
   const groupPref = prefs[name] || {};
   state.sortBy = groupPref.sortBy || 'currentPrice';
   state.preferredProductId = groupPref.preferredProductId || null;
+  state.excludedProducts = groupPref.excludedProducts || [];
   state.products = sortProducts(state.products, state.sortBy);
   if (!state.products.length) {
     $('#groupSubtitle').textContent = '这个比价组暂无商品';
@@ -75,12 +160,15 @@ async function loadData() {
     const hr = await sendMsg('GET_HISTORY', { productId: p.id });
     state.histories[p.id] = hr.ok ? (hr.data || []) : [];
   }
-  state.bestProduct = state.products[0];
+  state.bestProduct = state.products.filter(p => !state.excludedProducts.includes(p.id))[0] || state.products[0];
   state.avgPrice = state.products.reduce((s, p) => s + Number(p.currentPrice), 0) / state.products.length;
+  generateRecommendation();
   const platSet = new Set(state.products.map(p => p.platform));
-  $('#groupSubtitle').textContent = `共 ${state.products.length} 件商品 · ${platSet.size} 个平台 · 最低价 ¥${Number(state.bestProduct.currentPrice).toFixed(2)}`;
+  const visibleCount = state.products.filter(p => !state.excludedProducts.includes(p.id)).length;
+  $('#groupSubtitle').textContent = `共 ${state.products.length} 件 · ${visibleCount} 件有效 · ${platSet.size} 个平台 · 最低价 ¥${Number(state.bestProduct.currentPrice).toFixed(2)}`;
   renderSortControls();
   renderStats();
+  renderRecommendation();
   renderCompareCards();
   renderTable();
   renderLegend();
@@ -92,6 +180,92 @@ function renderEmpty() {
   $('#compareSummary').innerHTML = '';
   $('#chartArea').style.display = 'none';
   $('#detailTable').innerHTML = '';
+  $('#recommendArea').innerHTML = '';
+}
+
+function renderRecommendation() {
+  const container = $('#recommendArea');
+  if (!container) return;
+
+  const candidates = state.products.filter(p => !state.excludedProducts.includes(p.id));
+  if (!candidates.length) {
+    container.innerHTML = `
+      <div style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #fcd34d;border-radius:12px;padding:16px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:6px;">⚠️</div>
+        <div style="font-size:13px;color:#92400e;font-weight:600;">所有商品均被排除，无法生成购买建议</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="resetExclusions()">恢复所有商品</button>
+      </div>
+    `;
+    window.resetExclusions = async () => {
+      for (const pid of state.excludedProducts) {
+        await sendMsg('TOGGLE_EXCLUDED_PRODUCT', { groupName: state.groupName, productId: pid });
+      }
+      state.excludedProducts = [];
+      loadData();
+    };
+    return;
+  }
+
+  if (!state.recommendedProduct) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const p = state.recommendedProduct;
+  const plat = PLATFORM_MAP[p.platform] || {};
+  const platLabel = plat.label || p.platform;
+  const reasonsHtml = state.recommendReasons.map(r => `<span style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:#f0fdfa;color:#0d9488;border-radius:20px;font-size:11.5px;font-weight:600;margin-right:6px;margin-bottom:4px;">${r}</span>`).join('');
+
+  const excludedCount = state.excludedProducts.length;
+
+  container.innerHTML = `
+    <div style="background:linear-gradient(135deg,#ecfdf5,#f0f9ff);border:1px solid #a7f3d0;border-radius:16px;padding:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:280px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#10b981,#0891b2);display:flex;align-items:center;justify-content:center;font-size:22px;color:white;">
+              ✨
+            </div>
+            <div>
+              <div style="font-size:12px;color:#0d9488;font-weight:600;">智能购买建议</div>
+              <div style="font-size:16px;font-weight:800;color:#0f172a;">推荐购买 ${platLabel}平台</div>
+            </div>
+          </div>
+          <div style="font-size:13px;color:#0f172a;font-weight:600;margin-bottom:10px;">${escapeHtml(p.name)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">${reasonsHtml}</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#0d9488,#0891b2);-webkit-background-clip:text;background-clip:text;color:transparent;">¥${Number(p.currentPrice).toFixed(2)}</div>
+            ${p.targetPrice ? `<div style="align-self:center;font-size:12px;color:#64748b;">目标价 ¥${Number(p.targetPrice).toFixed(2)}</div>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+          <button class="btn btn-primary btn-sm" onclick="openPage('chart', 'productId=${encodeURIComponent(p.id)}')">
+            📈 看价格曲线
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="gotoBuy('${escapeHtml(p.id)}')">
+            🛒 去购买
+          </button>
+          ${excludedCount > 0 ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:#64748b;" onclick="resetExclusions()">已排除 ${excludedCount} 件，点击恢复</button>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  window.gotoBuy = (pid) => {
+    const product = state.products.find(x => x.id === pid);
+    if (product && product.url) {
+      chrome.tabs ? chrome.tabs.create({ url: product.url }) : window.open(product.url);
+    } else {
+      showToast('无商品链接', 'warn');
+    }
+  };
+  window.resetExclusions = async () => {
+    for (const pid of state.excludedProducts) {
+      await sendMsg('TOGGLE_EXCLUDED_PRODUCT', { groupName: state.groupName, productId: pid });
+    }
+    state.excludedProducts = [];
+    loadData();
+  };
 }
 
 function renderSortControls() {
@@ -135,12 +309,13 @@ function renderCompareCards() {
   $('#compareSummary').innerHTML = state.products.map((p, idx) => {
     const isBest = state.bestProduct && p.id === state.bestProduct.id;
     const isPreferred = state.preferredProductId === p.id;
+    const isExcluded = state.excludedProducts.includes(p.id);
     const diff = Number(p.currentPrice) - Number(state.bestProduct.currentPrice);
     const savePct = state.bestProduct && Number(state.bestProduct.currentPrice) > 0
       ? ((Number(p.currentPrice) - Number(state.bestProduct.currentPrice)) / Number(state.bestProduct.currentPrice) * 100)
       : 0;
     return `
-      <div class="compare-item ${isBest ? 'is-best' : ''} ${isPreferred ? 'is-preferred' : ''}" data-pid="${escapeHtml(p.id)}">
+      <div class="compare-item ${isBest ? 'is-best' : ''} ${isPreferred ? 'is-preferred' : ''} ${isExcluded ? 'is-excluded' : ''}" data-pid="${escapeHtml(p.id)}" style="${isExcluded ? 'opacity:.5;filter:grayscale(.3);' : ''}">
         <div class="ci-head">
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
             ${getPlatformBadge(p.platform)}
@@ -166,6 +341,9 @@ function renderCompareCards() {
           <button class="btn ${isPreferred ? 'btn-secondary' : 'btn-ghost'} btn-sm ci-btn" data-act="prefer" title="${isPreferred ? '取消首选' : '设为首选购买入口'}">
             ${isPreferred ? '⭐ 已设首选' : '☆ 设为首选'}
           </button>
+          <button class="btn ${isExcluded ? 'btn-secondary' : 'btn-ghost'} btn-sm ci-btn" data-act="exclude" title="${isExcluded ? '恢复到推荐' : '排除本次推荐'}">
+            ${isExcluded ? '✓ 已排除' : '🚫 排除'}
+          </button>
           <button class="btn btn-primary btn-sm ci-btn" data-act="chart">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none"><path d="M3 3v18h18 M7 14l4-4 4 4 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             价格曲线
@@ -185,24 +363,41 @@ function renderCompareCards() {
       const p = state.products.find(x => x.id === pid);
       if (!p) return;
       if (btn) {
-        e.stopPropagation();
-        if (btn.dataset.act === 'prefer') {
-          const newPreferred = state.preferredProductId === pid ? null : pid;
-          sendMsg('SET_PREFERRED_PRODUCT', { groupName: state.groupName, productId: newPreferred }).then(() => {
-            state.preferredProductId = newPreferred;
-            renderCompareCards();
-            renderTable();
-            showToast(newPreferred ? '✅ 已设为首选购买入口' : '已取消首选');
-          });
-        } else if (btn.dataset.act === 'chart') {
+          e.stopPropagation();
+          if (btn.dataset.act === 'prefer') {
+            const newPreferred = state.preferredProductId === pid ? null : pid;
+            sendMsg('SET_PREFERRED_PRODUCT', { groupName: state.groupName, productId: newPreferred }).then(() => {
+              state.preferredProductId = newPreferred;
+              generateRecommendation();
+              renderCompareCards();
+              renderTable();
+              renderRecommendation();
+              showToast(newPreferred ? '✅ 已设为首选购买入口' : '已取消首选');
+            });
+          } else if (btn.dataset.act === 'exclude') {
+            sendMsg('TOGGLE_EXCLUDED_PRODUCT', { groupName: state.groupName, productId: pid }).then((r) => {
+              if (r.ok) {
+                state.excludedProducts = r.data || [];
+                state.bestProduct = state.products.filter(x => !state.excludedProducts.includes(x.id))[0] || state.products[0];
+                generateRecommendation();
+                const platSet = new Set(state.products.map(x => x.platform));
+                const visibleCount = state.products.filter(x => !state.excludedProducts.includes(x.id)).length;
+                $('#groupSubtitle').textContent = `共 ${state.products.length} 件 · ${visibleCount} 件有效 · ${platSet.size} 个平台 · 最低价 ¥${Number(state.bestProduct.currentPrice).toFixed(2)}`;
+                renderRecommendation();
+                renderCompareCards();
+                renderTable();
+                showToast(state.excludedProducts.includes(pid) ? '🚫 已排除本次推荐' : '✓ 已恢复到推荐');
+              }
+            });
+          } else if (btn.dataset.act === 'chart') {
+            openPage('chart', `productId=${encodeURIComponent(pid)}`);
+          } else if (btn.dataset.act === 'buy') {
+            if (p.url) chrome.tabs ? chrome.tabs.create({ url: p.url }) : window.open(p.url);
+            else showToast('无商品链接', 'warn');
+          }
+        } else {
           openPage('chart', `productId=${encodeURIComponent(pid)}`);
-        } else if (btn.dataset.act === 'buy') {
-          if (p.url) chrome.tabs ? chrome.tabs.create({ url: p.url }) : window.open(p.url);
-          else showToast('无商品链接', 'warn');
         }
-      } else {
-        openPage('chart', `productId=${encodeURIComponent(pid)}`);
-      }
     });
   });
 }

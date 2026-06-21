@@ -1,21 +1,39 @@
 const state = {
   product: null,
   history: [],
-  productId: null
+  productId: null,
+  notifId: null,
+  triggerTime: null,
+  sourceType: null,
+  notification: null,
+  highlightIdx: -1
 };
 
-function getProductId() {
-  const p = new URLSearchParams(location.search).get('productId');
-  return p;
+function getUrlParams() {
+  const p = new URLSearchParams(location.search);
+  return {
+    productId: p.get('productId'),
+    notifId: p.get('notifId'),
+    triggerTime: p.get('t') ? Number(p.get('t')) : null,
+    sourceType: p.get('src')
+  };
 }
 
 async function loadData() {
-  state.productId = getProductId();
+  const params = getUrlParams();
+  state.productId = params.productId;
+  state.notifId = params.notifId;
+  state.triggerTime = params.triggerTime;
+  state.sourceType = params.sourceType;
+  state.notification = null;
+  state.highlightIdx = -1;
+
   if (!state.productId) {
     showToast('无效的商品ID', 'error');
     setTimeout(() => openPage('favorites'), 1200);
     return;
   }
+
   const r = await sendMsg('GET_PRODUCTS');
   if (!r.ok) return;
   state.product = (r.data || []).find(p => p.id === state.productId);
@@ -24,18 +42,126 @@ async function loadData() {
     setTimeout(() => openPage('favorites'), 1200);
     return;
   }
+
   const h = await sendMsg('GET_HISTORY', { productId: state.productId });
   state.history = h.ok ? (h.data || []) : [];
+
+  if (state.notifId) {
+    const notifR = await sendMsg('GET_NOTIFICATIONS');
+    if (notifR.ok && notifR.data) {
+      state.notification = notifR.data.find(n => n.id === state.notifId);
+    }
+  }
+
+  if (state.history.length && state.triggerTime) {
+    const sorted = [...state.history].sort((a, b) => a.timestamp - b.timestamp);
+    let closestIdx = 0;
+    let minDiff = Math.abs(sorted[0].timestamp - state.triggerTime);
+    for (let i = 1; i < sorted.length; i++) {
+      const diff = Math.abs(sorted[i].timestamp - state.triggerTime);
+      if (diff < minDiff) { minDiff = diff; closestIdx = i; }
+    }
+    state.highlightIdx = closestIdx;
+  }
+
   renderAll();
   loadAndRenderCheckInfo();
 }
 
 function renderAll() {
   renderHeader();
+  renderContext();
   renderStats();
   renderChart();
   renderInfo();
   renderSettings();
+}
+
+function renderContext() {
+  const container = $('#notifContext');
+  if (!container) return;
+
+  if (!state.notification && !state.sourceType) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  const NOTIF_META = {
+    priceDrop: { label: '降价提醒', emoji: '📉', color: '#10b981', bg: '#ecfdf5' },
+    targetReached: { label: '到价提醒', emoji: '🎯', color: '#f59e0b', bg: '#fffbeb' },
+    priceSpike: { label: '涨价提醒', emoji: '⚠️', color: '#ef4444', bg: '#fef2f2' },
+    restock: { label: '补货通知', emoji: '📦', color: '#0d9488', bg: '#f0fdfa' },
+    coupon: { label: '优惠券', emoji: '🎟️', color: '#8b5cf6', bg: '#faf5ff' }
+  };
+
+  let html = '';
+  if (state.notification) {
+    const meta = NOTIF_META[state.notification.type] || { label: '提醒', emoji: '🔔', color: '#0d9488', bg: '#f0fdfa' };
+    const extra = state.notification.extra || {};
+    const priceParts = [];
+    if (extra.oldPrice !== undefined && extra.newPrice !== undefined && extra.oldPrice !== extra.newPrice) {
+      priceParts.push(`
+        <span style="font-size:12px;color:#64748b;">当时价：<b>¥${Number(extra.oldPrice).toFixed(2)}</b></span>
+        <span style="font-size:12px;color:#64748b;">→</span>
+        <span style="font-size:12px;color:${meta.color};font-weight:700;">触发价：¥${Number(extra.newPrice).toFixed(2)}</span>
+        ${extra.deltaPct !== undefined ? `<span style="font-size:11px;padding:2px 6px;background:${meta.bg};color:${meta.color};border-radius:4px;font-weight:700;">${extra.deltaPct > 0 ? '+' : ''}${extra.deltaPct.toFixed(1)}%</span>` : ''}
+      `);
+    } else if (extra.newPrice !== undefined) {
+      priceParts.push(`<span style="font-size:12px;color:${meta.color};font-weight:700;">触发价：¥${Number(extra.newPrice).toFixed(2)}</span>`);
+    }
+    if (extra.targetPrice) {
+      priceParts.push(`<span style="font-size:12px;color:#64748b;">🎯 目标价：<b>¥${Number(extra.targetPrice).toFixed(2)}</b></span>`);
+    }
+    if (extra.couponValue) {
+      priceParts.push(`<span style="font-size:11px;padding:2px 6px;background:#faf5ff;color:#8b5cf6;border-radius:4px;font-weight:700;">🎟️ 券 ¥${Number(extra.couponValue).toFixed(0)}</span>`);
+    }
+
+    html = `
+      <div style="background:linear-gradient(135deg,${meta.bg},#ffffff);border:1px solid ${meta.color}20;border-radius:12px;padding:14px 18px;margin-bottom:16px;">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:${meta.bg};color:${meta.color};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">
+            ${meta.emoji}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+              <span style="font-size:11px;padding:2px 8px;background:${meta.bg};color:${meta.color};border-radius:10px;font-weight:700;">${meta.label}</span>
+              <span style="font-size:12px;color:#64748b;">触发时间：<b>${formatDateTime(state.notification.createdAt)}</b></span>
+            </div>
+            <h4 style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;">${escapeHtml(state.notification.title)}</h4>
+            <p style="font-size:12.5px;color:#475569;margin-bottom:8px;">${escapeHtml(state.notification.message)}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+              ${priceParts.join('')}
+            </div>
+          </div>
+          <div style="flex-shrink:0;">
+            <button class="btn btn-ghost btn-sm" onclick="openPage('notifications')">← 返回通知</button>
+          </div>
+        </div>
+        ${state.highlightIdx >= 0 ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed ${meta.color}30;font-size:11.5px;color:${meta.color};font-weight:600;">
+          📍 已自动定位到图表中的触发点，查看当时的价格走势
+        </div>` : ''}
+      </div>
+    `;
+  } else if (state.sourceType === 'checkLog') {
+    html = `
+      <div style="background:linear-gradient(135deg,#f0f9ff,#ffffff);border:1px solid #0ea5e920;border-radius:12px;padding:14px 18px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:40px;height:40px;border-radius:10px;background:#e0f2fe;color:#0ea5e9;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">
+            🔍
+          </div>
+          <div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:3px;">来自检测日志</div>
+            <h4 style="font-size:14px;font-weight:700;color:#0f172a;">检测中发现此商品价格变化</h4>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openPage('notifications')">通知记录 →</button>
+        </div>
+      </div>
+    `;
+  }
+
+  container.style.display = 'block';
+  container.innerHTML = html;
 }
 
 function renderHeader() {
@@ -107,7 +233,8 @@ async function renderChart() {
   requestAnimationFrame(() => {
     PriceChart.draw(canvas, sorted, {
       targetPrice: p.targetPrice || null,
-      spikeThreshold: Number(spike) / 100
+      spikeThreshold: Number(spike) / 100,
+      highlightIndex: state.highlightIdx >= 0 ? state.highlightIdx : undefined
     });
   });
 
@@ -221,7 +348,7 @@ function renderSettings() {
   $$('[data-plan]').forEach(btn => btn.addEventListener('click', async () => {
     const r = await sendMsg('UPDATE_PRODUCT', { id: p.id, payload: { purchasePlan: btn.dataset.plan } });
     if (r.ok) { state.product = r.data; renderAll(); showToast('状态已更新'); }
-  })));
+  }));
 }
 
 function attachActions() {

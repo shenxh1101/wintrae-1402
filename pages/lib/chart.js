@@ -77,6 +77,23 @@ const PriceChart = {
           ctx.fill();
         }
       }
+      if (options.highlightIndex !== undefined && i === options.highlightIndex) {
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(245,158,11,.25)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = '#92400e';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = x > W / 2 ? 'right' : 'left';
+        ctx.fillText(`📍 触发点 ¥${d.price}`, x + (x > W / 2 ? -8 : 10), y - 14);
+      }
     }
 
     const days7Cutoff = xMax - 7 * 86400000;

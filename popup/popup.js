@@ -1,33 +1,37 @@
 const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
 
-const DRAFT_KEY = 'price_tracker_popup_draft';
+const DRAFT_KEY_SESSION = 'price_tracker_popup_draft';
+const DRAFT_KEY_LOCAL = 'price_tracker_popup_draft_local';
 
-function loadDraft() {
+async function loadDraft() {
   try {
-    const raw = sessionStorage.getItem(DRAFT_KEY);
+    let raw = sessionStorage.getItem(DRAFT_KEY_SESSION);
     if (raw) return JSON.parse(raw);
+    const r = await chrome.storage.local.get(DRAFT_KEY_LOCAL);
+    if (r[DRAFT_KEY_LOCAL]) return r[DRAFT_KEY_LOCAL];
   } catch (e) {}
   return null;
 }
-function saveDraft(data) {
-  try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
+async function saveDraft(data) {
+  try {
+    sessionStorage.setItem(DRAFT_KEY_SESSION, JSON.stringify(data));
+    await chrome.storage.local.set({ [DRAFT_KEY_LOCAL]: data });
+  } catch (e) {}
 }
-function clearDraft() {
-  try { sessionStorage.removeItem(DRAFT_KEY); } catch (e) {}
+async function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY_SESSION);
+    await chrome.storage.local.remove(DRAFT_KEY_LOCAL);
+  } catch (e) {}
 }
 
 const state = {
   extracted: null,
   specs: [],
-  editingId: null
+  editingId: null,
+  initialized: false
 };
-
-const draft = loadDraft();
-if (draft && Array.isArray(draft.specs)) {
-  state.specs = draft.specs;
-  if (draft.editingId) state.editingId = draft.editingId;
-}
 
 async function sendMessage(type, payload = {}) {
   return new Promise((resolve) => {
@@ -71,7 +75,7 @@ function renderSpecs() {
       saveDraft({ specs: state.specs, editingId: state.editingId });
     });
     list.appendChild(tag);
-  };
+  });
   const addRow = document.createElement('div');
   addRow.className = 'spec-add-row';
   addRow.innerHTML = `
@@ -168,26 +172,36 @@ async function onSave() {
   const btn = $('#saveBtn');
   btn.disabled = true;
   btn.style.opacity = '0.7';
+  btn.textContent = '保存中...';
   const r = await sendMessage('ADD_PRODUCT', { payload: data });
   btn.disabled = false;
   btn.style.opacity = '1';
+  btn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" stroke="white" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    保存商品
+  `;
   if (r.ok) {
     toast('✓ 已保存，开始追踪价格');
-    clearDraft();
-    setTimeout(updateStats, 300);
+    await clearDraft();
+    const savedId = r.data?.id;
+    setTimeout(updateStats, 200);
     setTimeout(() => {
-      $('#inputName').value = '';
-      $('#inputPrice').value = '';
-      $('#inputUrl').value = '';
-      $('#inputShop').value = '';
-      $('#inputTarget').value = '';
-      state.specs = [];
-      state.editingId = null;
-      renderSpecs();
-    }, 500);
+      if (confirm('保存成功！是否跳转到收藏页查看？')) {
+        gotoPage('favorites');
+      } else {
+        $('#inputName').value = '';
+        $('#inputPrice').value = '';
+        $('#inputUrl').value = '';
+        $('#inputShop').value = '';
+        $('#inputTarget').value = '';
+        state.specs = [];
+        state.editingId = null;
+        renderSpecs();
+      }
+    }, 600);
   } else {
     toast('保存失败: ' + (r.error || '未知错误'), 'error');
-    saveDraft({ specs: state.specs, editingId: state.editingId });
+    await saveDraft({ specs: state.specs, editingId: state.editingId });
   }
 }
 
@@ -228,11 +242,44 @@ function gotoPage(name) {
   window.close();
 }
 
+function restoreFromDraft(draft) {
+  if (!draft) return;
+  if (Array.isArray(draft.specs)) {
+    state.specs = draft.specs;
+  }
+  if (draft.editingId) state.editingId = draft.editingId;
+  if (draft.name) $('#inputName').value = draft.name;
+  if (draft.price) $('#inputPrice').value = draft.price;
+  if (draft.target) $('#inputTarget').value = draft.target;
+  if (draft.url) $('#inputUrl').value = draft.url;
+  if (draft.shop) $('#inputShop').value = draft.shop;
+  renderSpecs();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const draft = await loadDraft();
+    restoreFromDraft(draft);
+  } catch (e) { console.warn('Load draft failed', e); }
+  state.initialized = true;
   renderSpecs();
   $('#saveBtn').addEventListener('click', onSave);
   $('#manualFillBtn').addEventListener('click', autoExtract);
   $$('.nav-btn').forEach(b => b.addEventListener('click', () => gotoPage(b.dataset.goto)));
   updateStats();
   setTimeout(autoExtract, 120);
+
+  setInterval(() => {
+    if (state.initialized && (state.specs.length > 0 || $('#inputName').value)) {
+      saveDraft({
+        specs: state.specs,
+        editingId: state.editingId,
+        name: $('#inputName').value,
+        price: $('#inputPrice').value,
+        target: $('#inputTarget').value,
+        url: $('#inputUrl').value,
+        shop: $('#inputShop').value
+      });
+    }
+  }, 3000);
 });
