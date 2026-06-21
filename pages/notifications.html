@@ -61,6 +61,8 @@
         </div>
       </div>
 
+      <div id="checkInfo"></div>
+
       <div class="notif-stats">
         <div class="stat-card sc-blue">
           <span class="stat-label">总通知数</span>
@@ -81,6 +83,14 @@
           <span class="stat-label">未读通知</span>
           <span class="stat-value" id="statUnread">0</span>
           <span class="stat-change" id="statUnreadDesc">🔔</span>
+        </div>
+      </div>
+
+      <div id="viewSwitch" style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:10px;">
+        <span style="font-size:12px;color:#64748b;align-self:center;">视图：</span>
+        <div style="display:flex;background:var(--bg-soft);border-radius:8px;padding:2px;gap:2px;">
+          <button class="filter-btn active" data-view="list" style="padding:5px 10px;font-size:11.5px;">📋 列表</button>
+          <button class="filter-btn" data-view="group" style="padding:5px 10px;font-size:11.5px;">📦 按商品</button>
         </div>
       </div>
 

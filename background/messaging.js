@@ -80,6 +80,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case 'GET_UNREAD_COUNT':
           sendResponse({ ok: true, data: await (self.Notifier ? self.Notifier.unreadCount() : 0) });
           break;
+        case 'GET_LAST_CHECK_LOG':
+          sendResponse({ ok: true, data: await (self.StorageAPI ? self.StorageAPI.getLastCheckLog() : null) });
+          break;
+        case 'GET_CHECK_LOGS':
+          sendResponse({ ok: true, data: await (self.StorageAPI ? self.StorageAPI.getCheckLogs(msg.limit || 20) : []) });
+          break;
+        case 'GET_GROUP_PREFS':
+          sendResponse({ ok: true, data: await (self.StorageAPI ? self.StorageAPI.getGroupPrefs() : {}) });
+          break;
+        case 'SET_PREFERRED_PRODUCT':
+          if (self.StorageAPI) {
+            await self.StorageAPI.setPreferredProduct(msg.groupName, msg.productId);
+            sendResponse({ ok: true });
+          } else sendResponse({ ok: false });
+          break;
+        case 'GET_GROUP_SORT':
+          sendResponse({ ok: true, data: await (self.StorageAPI ? self.StorageAPI.getGroupSort(msg.groupName) : 'currentPrice') });
+          break;
+        case 'SET_GROUP_SORT':
+          if (self.StorageAPI) {
+            await self.StorageAPI.setGroupSort(msg.groupName, msg.sortBy);
+            sendResponse({ ok: true });
+          } else sendResponse({ ok: false });
+          break;
         case 'EXTRACT_FROM_PAGE': {
           const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
           if (!tab || !tab.id) { sendResponse({ ok: false, error: 'No active tab' }); return; }

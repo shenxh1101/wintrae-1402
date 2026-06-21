@@ -104,6 +104,7 @@ async function checkAllPrices() {
   const { products, settings } = await chrome.storage.local.get(['products', 'settings']);
   const s = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   let notifiedCount = 0;
+  const changedProducts = [];
   const activeProducts = (products || []).filter(p => p.purchasePlan !== 'archived' && p.purchasePlan !== 'bought');
   for (const product of activeProducts) {
     try {
@@ -114,9 +115,13 @@ async function checkAllPrices() {
       const hadCoupon = !!product.hasCoupon;
       const isInStock = !!result.inStock;
       const hasCoupon = !!result.hasCoupon;
+      let productChanged = false;
+      let changeReasons = [];
 
       if (newPrice && newPrice !== oldPrice) {
+        productChanged = true;
         const deltaPct = ((newPrice - oldPrice) / oldPrice) * 100;
+        changeReasons.push(deltaPct < 0 ? `降价 ${Math.abs(deltaPct).toFixed(1)}%` : `涨价 ${deltaPct.toFixed(1)}%`);
         const spikeThresh = Number(s.priceSpikeThreshold) || 15;
         const dropThresh = Number(s.priceDropThreshold) || 5;
         product.currentPrice = newPrice;
@@ -169,6 +174,8 @@ async function checkAllPrices() {
       }
 
       if (!wasInStock && isInStock && product.restockNotify) {
+        productChanged = true;
+        changeReasons.push('补货');
         notifiedCount++;
         const msg = `${product.name.substring(0, 20)} 已补货，快去看看吧`;
         showNotification(`restock_${product.id}`, {
@@ -189,6 +196,8 @@ async function checkAllPrices() {
       product.inStock = isInStock;
 
       if (!hadCoupon && hasCoupon && product.couponNotify) {
+        productChanged = true;
+        changeReasons.push('有优惠券');
         notifiedCount++;
         const msg = `${product.name.substring(0, 20)} 有新的优惠券可以使用`;
         showNotification(`coupon_${product.id}`, {
@@ -208,12 +217,31 @@ async function checkAllPrices() {
       }
       product.hasCoupon = hasCoupon;
 
+      if (productChanged) {
+        changedProducts.push({
+          id: product.id,
+          name: product.name,
+          platform: product.platform,
+          oldPrice,
+          newPrice,
+          reasons: changeReasons
+        });
+      }
+
     } catch (e) {
       console.warn('Price check failed for', product.name, e);
     }
   }
   await chrome.storage.local.set({ products });
-  return { notifiedCount, checkedCount: activeProducts.length };
+  const logResult = {
+    checkedCount: activeProducts.length,
+    notifiedCount,
+    changedCount: changedProducts.length,
+    changedProducts,
+    source: 'auto'
+  };
+  try { await self.StorageAPI.addCheckLog(logResult); } catch (e) {}
+  return logResult;
 }
 
 async function simulatePriceCheck(product) {

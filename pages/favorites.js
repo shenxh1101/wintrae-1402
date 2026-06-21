@@ -34,6 +34,7 @@ async function loadProducts() {
   applyFilters();
   renderAll();
   loadUnreadBadge();
+  loadAndRenderCheckInfo();
 }
 
 function getAllGroups() {

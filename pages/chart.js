@@ -27,6 +27,7 @@ async function loadData() {
   const h = await sendMsg('GET_HISTORY', { productId: state.productId });
   state.history = h.ok ? (h.data || []) : [];
   renderAll();
+  loadAndRenderCheckInfo();
 }
 
 function renderAll() {

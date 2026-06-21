@@ -1,7 +1,9 @@
 const state = {
   records: [],
   filterType: 'all',
-  onlyUnread: false
+  onlyUnread: false,
+  viewMode: 'list',
+  expandedProduct: null
 };
 
 const NOTIF_META = {
@@ -16,6 +18,7 @@ async function loadData() {
   const r = await sendMsg('GET_NOTIFICATIONS');
   if (r.ok) state.records = r.data || [];
   renderAll();
+  loadAndRenderCheckInfo();
 }
 
 function applyFilter() {
@@ -124,9 +127,175 @@ function renderList() {
   });
 }
 
-function openChart(productId) {
+function openChart(productId, timestamp) {
   if (!productId) { showToast('商品不存在', 'warn'); return; }
-  openPage('chart', `productId=${encodeURIComponent(productId)}`);
+  const param = timestamp ? `productId=${encodeURIComponent(productId)}&t=${timestamp}` : `productId=${encodeURIComponent(productId)}`;
+  openPage('chart', param);
+}
+
+function getGroupedData() {
+  const list = applyFilter();
+  const groups = {};
+  list.forEach(item => {
+    const pid = item.productId;
+    if (!groups[pid]) {
+      groups[pid] = {
+        productId: pid,
+        productName: item.productName || '未知商品',
+        records: [],
+        typeCount: {},
+        unreadCount: 0,
+        latestAt: 0,
+        lowestPrice: null,
+        latestPrice: null
+      };
+    }
+    groups[pid].records.push(item);
+    groups[pid].typeCount[item.type] = (groups[pid].typeCount[item.type] || 0) + 1;
+    if (!item.read) groups[pid].unreadCount++;
+    if (item.createdAt > groups[pid].latestAt) groups[pid].latestAt = item.createdAt;
+    if (item.extra && item.extra.newPrice !== undefined) {
+      if (groups[pid].lowestPrice === null || item.extra.newPrice < groups[pid].lowestPrice) {
+        groups[pid].lowestPrice = item.extra.newPrice;
+      }
+      if (groups[pid].latestPrice === null || item.createdAt > groups[pid].latestPriceAt) {
+        groups[pid].latestPrice = item.extra.newPrice;
+        groups[pid].latestPriceAt = item.createdAt;
+      }
+    }
+  });
+  return Object.values(groups).sort((a, b) => b.latestAt - a.latestAt);
+}
+
+function renderGroupedView() {
+  const groups = getGroupedData();
+  const container = $('#notifList');
+  const empty = $('#emptyState');
+  if (!groups.length) {
+    container.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+  container.innerHTML = groups.map(group => {
+    const isExpanded = state.expandedProduct === group.productId;
+    const typeBadges = Object.entries(group.typeCount).map(([type, count]) => {
+      const meta = NOTIF_META[type] || { label: '通知', emoji: '🔔', color: '#0d9488', bg: '#f0fdfa' };
+      return `<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 6px;background:${meta.bg};color:${meta.color};border-radius:10px;font-size:10.5px;font-weight:600;">${meta.emoji} ${meta.label} ×${count}</span>`;
+    }).join('');
+    const header = `
+      <div class="notif-card ${group.unreadCount > 0 ? 'unread' : 'read'}" data-group="${escapeHtml(group.productId)}" style="cursor:pointer;">
+        <div class="notif-icon" style="background:linear-gradient(135deg,#f59e0b,#ef4444);color:white;width:42px;height:42px;font-size:18px;">
+          📦
+        </div>
+        <div class="notif-body" style="flex:1;">
+          <div class="notif-top">
+            <span class="notif-type" style="background:#fef3c7;color:#d97706;">商品汇总</span>
+            <span class="notif-time">最近 ${formatDateTime(group.latestAt)}</span>
+            ${group.unreadCount > 0 ? `<span class="notif-dot" style="width:18px;height:18px;font-size:10px;display:inline-flex;align-items:center;justify-content:center;">${group.unreadCount}</span>` : ''}
+          </div>
+          <h4 class="notif-title" style="margin-bottom:6px;">${escapeHtml(group.productName)}</h4>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${typeBadges}</div>
+          <div style="display:flex;gap:16px;font-size:12px;color:var(--text-2);">
+            <span>📊 共 ${group.records.length} 条</span>
+            ${group.latestPrice !== null ? `<span>💰 现价 ¥${Number(group.latestPrice).toFixed(2)}</span>` : ''}
+            ${group.lowestPrice !== null ? `<span>📉 历史低 ¥${Number(group.lowestPrice).toFixed(2)}</span>` : ''}
+          </div>
+        </div>
+        <div class="notif-actions">
+          <button class="notif-btn" data-action="toggle" title="${isExpanded ? '收起' : '展开'}">
+            ${isExpanded ? '▲' : '▼'}
+          </button>
+        </div>
+      </div>
+    `;
+    if (!isExpanded) return header;
+    const records = group.records.sort((a, b) => b.createdAt - a.createdAt);
+    const recordItems = records.map(item => {
+      const meta = NOTIF_META[item.type] || { label: '通知', emoji: '🔔', color: '#0d9488', bg: '#f0fdfa' };
+      const priceInfo = item.extra && item.extra.oldPrice !== undefined ? `
+        <div class="notif-prices">
+          ${item.extra.oldPrice !== item.extra.newPrice ? `
+            <span class="np-old">原价 ¥${Number(item.extra.oldPrice).toFixed(2)}</span>
+            <span class="np-arrow">→</span>
+            <span class="np-new" style="color:${meta.color};">现价 ¥${Number(item.extra.newPrice).toFixed(2)}</span>
+            <span class="np-delta" style="background:${meta.bg};color:${meta.color};">${item.extra.deltaPct !== undefined ? (item.extra.deltaPct > 0 ? '+' : '') + item.extra.deltaPct.toFixed(1) + '%' : ''}</span>
+          ` : ''}
+          ${item.extra.targetPrice ? `<span class="np-target">🎯 目标 ¥${Number(item.extra.targetPrice).toFixed(2)}</span>` : ''}
+        </div>
+      ` : '';
+      return `
+        <div class="notif-card ${item.read ? 'read' : 'unread'}" data-id="${escapeHtml(item.id)}" data-pid="${escapeHtml(item.productId)}" style="margin-left:32px;border-left:3px solid ${meta.bg};">
+          <div class="notif-icon" style="background:${meta.bg};color:${meta.color};">
+            ${meta.emoji}
+          </div>
+          <div class="notif-body">
+            <div class="notif-top">
+              <span class="notif-type" style="color:${meta.color};background:${meta.bg};">${meta.label}</span>
+              <span class="notif-time">${formatDateTime(item.createdAt)}</span>
+              ${!item.read ? '<span class="notif-dot"></span>' : ''}
+            </div>
+            <h4 class="notif-title">${escapeHtml(item.title)}</h4>
+            <p class="notif-msg">${escapeHtml(item.message)}</p>
+            ${priceInfo}
+          </div>
+          <div class="notif-actions">
+            <button class="notif-btn" data-action="read" title="${item.read ? '已读' : '标为已读'}">
+              ${item.read ? '✓' : '📖'}
+            </button>
+            <button class="notif-btn" data-action="chart" title="查看价格曲线">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3 3v18h18 M7 14l4-4 4 4 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    return header + recordItems;
+  }).join('');
+
+  $$('#notifList [data-group]').forEach(card => {
+    const pid = card.dataset.group;
+    card.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (btn) {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        if (action === 'toggle') {
+          state.expandedProduct = state.expandedProduct === pid ? null : pid;
+          renderAll();
+        }
+      } else {
+        state.expandedProduct = state.expandedProduct === pid ? null : pid;
+        renderAll();
+      }
+    });
+  });
+
+  $$('#notifList .notif-card[data-id]').forEach(card => {
+    const id = card.dataset.id;
+    const pid = card.dataset.pid;
+    card.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-action]')) return;
+      const item = state.records.find(x => x.id === id);
+      await sendMsg('MARK_NOTIF_READ', { id });
+      openChart(pid, item ? item.createdAt : null);
+    });
+    const btns = card.querySelectorAll('[data-action]');
+    btns.forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const item = state.records.find(x => x.id === id);
+        if (action === 'read') {
+          await sendMsg('MARK_NOTIF_READ', { id });
+          loadData();
+        } else if (action === 'chart') {
+          await sendMsg('MARK_NOTIF_READ', { id });
+          openChart(pid, item ? item.createdAt : null);
+        }
+      });
+    });
+  });
 }
 
 function renderFilters() {
@@ -142,11 +311,27 @@ function renderFilters() {
 function renderAll() {
   renderStats();
   renderFilters();
-  renderList();
+  if (state.viewMode === 'list') {
+    renderList();
+  } else {
+    renderGroupedView();
+  }
+}
+
+function bindViewSwitch() {
+  $$('#viewSwitch [data-view]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === state.viewMode);
+    btn.onclick = () => {
+      state.viewMode = btn.dataset.view;
+      state.expandedProduct = null;
+      renderAll();
+    };
+  });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
+  bindViewSwitch();
   $('#markAllReadBtn').addEventListener('click', async () => {
     await sendMsg('MARK_NOTIF_ALL_READ');
     showToast('✅ 已全部标为已读');

@@ -3,7 +3,9 @@ const state = {
   products: [],
   histories: {},
   bestProduct: null,
-  avgPrice: 0
+  avgPrice: 0,
+  sortBy: 'currentPrice',
+  preferredProductId: null
 };
 
 const LINE_COLORS = ['#0d9488', '#0891b2', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981', '#6366f1'];
@@ -14,6 +16,37 @@ function parseParams() {
   return state.groupName;
 }
 
+function sortProducts(products, sortBy) {
+  const sorted = [...products];
+  switch (sortBy) {
+    case 'currentPrice':
+      sorted.sort((a, b) => Number(a.currentPrice) - Number(b.currentPrice));
+      break;
+    case 'lowestPrice':
+      sorted.sort((a, b) => Number(a.lowestPrice || a.currentPrice) - Number(b.lowestPrice || b.currentPrice));
+      break;
+    case 'target':
+      sorted.sort((a, b) => {
+        const aHit = a.targetPrice && a.currentPrice <= a.targetPrice ? 0 : 1;
+        const bHit = b.targetPrice && b.currentPrice <= b.targetPrice ? 0 : 1;
+        if (aHit !== bHit) return aHit - bHit;
+        return Number(a.currentPrice) - Number(b.currentPrice);
+      });
+      break;
+    case 'platform':
+      sorted.sort((a, b) => {
+        const pa = (PLATFORM_MAP[a.platform] || {}).label || a.platform;
+        const pb = (PLATFORM_MAP[b.platform] || {}).label || b.platform;
+        return pa.localeCompare(pb, 'zh-CN');
+      });
+      break;
+    case 'shop':
+      sorted.sort((a, b) => (a.shop || '').localeCompare(b.shop || '', 'zh-CN'));
+      break;
+  }
+  return sorted;
+}
+
 async function loadData() {
   const name = parseParams();
   if (!name) {
@@ -22,10 +55,17 @@ async function loadData() {
     return;
   }
   $('#groupTitle').textContent = `🏷️ ${name}`;
-  const r = await sendMsg('GET_PRODUCTS');
+  const [r, prefsR] = await Promise.all([
+    sendMsg('GET_PRODUCTS'),
+    sendMsg('GET_GROUP_PREFS')
+  ]);
   const all = r.ok ? r.data || [] : [];
   state.products = all.filter(p => p.compareGroup === name);
-  state.products.sort((a, b) => Number(a.currentPrice) - Number(b.currentPrice));
+  const prefs = prefsR.ok ? (prefsR.data || {}) : {};
+  const groupPref = prefs[name] || {};
+  state.sortBy = groupPref.sortBy || 'currentPrice';
+  state.preferredProductId = groupPref.preferredProductId || null;
+  state.products = sortProducts(state.products, state.sortBy);
   if (!state.products.length) {
     $('#groupSubtitle').textContent = '这个比价组暂无商品';
     renderEmpty();
@@ -39,17 +79,38 @@ async function loadData() {
   state.avgPrice = state.products.reduce((s, p) => s + Number(p.currentPrice), 0) / state.products.length;
   const platSet = new Set(state.products.map(p => p.platform));
   $('#groupSubtitle').textContent = `共 ${state.products.length} 件商品 · ${platSet.size} 个平台 · 最低价 ¥${Number(state.bestProduct.currentPrice).toFixed(2)}`;
+  renderSortControls();
   renderStats();
   renderCompareCards();
   renderTable();
   renderLegend();
   renderGroupChart();
+  loadAndRenderCheckInfo();
 }
 
 function renderEmpty() {
   $('#compareSummary').innerHTML = '';
   $('#chartArea').style.display = 'none';
   $('#detailTable').innerHTML = '';
+}
+
+function renderSortControls() {
+  const container = $('#sortControls');
+  if (!container) return;
+  container.querySelectorAll('[data-sort]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sort === state.sortBy);
+    btn.onclick = async () => {
+      state.sortBy = btn.dataset.sort;
+      await sendMsg('SET_GROUP_SORT', { groupName: state.groupName, sortBy: state.sortBy });
+      state.products = sortProducts(state.products, state.sortBy);
+      state.bestProduct = state.products[0];
+      renderSortControls();
+      renderCompareCards();
+      renderTable();
+      renderLegend();
+      renderGroupChart();
+    };
+  });
 }
 
 function renderStats() {
@@ -73,15 +134,17 @@ function renderStats() {
 function renderCompareCards() {
   $('#compareSummary').innerHTML = state.products.map((p, idx) => {
     const isBest = state.bestProduct && p.id === state.bestProduct.id;
+    const isPreferred = state.preferredProductId === p.id;
     const diff = Number(p.currentPrice) - Number(state.bestProduct.currentPrice);
     const savePct = state.bestProduct && Number(state.bestProduct.currentPrice) > 0
       ? ((Number(p.currentPrice) - Number(state.bestProduct.currentPrice)) / Number(state.bestProduct.currentPrice) * 100)
       : 0;
     return `
-      <div class="compare-item ${isBest ? 'is-best' : ''}" data-pid="${escapeHtml(p.id)}">
+      <div class="compare-item ${isBest ? 'is-best' : ''} ${isPreferred ? 'is-preferred' : ''}" data-pid="${escapeHtml(p.id)}">
         <div class="ci-head">
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
             ${getPlatformBadge(p.platform)}
+            ${isPreferred ? '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#fef3c7;color:#d97706;border-radius:20px;font-size:10.5px;font-weight:700;">⭐ 首选</span>' : ''}
           </div>
         </div>
         <div class="ci-name">${escapeHtml(p.name)}</div>
@@ -100,6 +163,9 @@ function renderCompareCards() {
           ${isBest ? `<div><span>🏆</span><b style="color:#10b981;">比均价便宜 ¥${(state.avgPrice - Number(p.currentPrice)).toFixed(2)}</b></div>` : ''}
         </div>
         <div class="ci-btn-row">
+          <button class="btn ${isPreferred ? 'btn-secondary' : 'btn-ghost'} btn-sm ci-btn" data-act="prefer" title="${isPreferred ? '取消首选' : '设为首选购买入口'}">
+            ${isPreferred ? '⭐ 已设首选' : '☆ 设为首选'}
+          </button>
           <button class="btn btn-primary btn-sm ci-btn" data-act="chart">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none"><path d="M3 3v18h18 M7 14l4-4 4 4 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             价格曲线
@@ -120,8 +186,17 @@ function renderCompareCards() {
       if (!p) return;
       if (btn) {
         e.stopPropagation();
-        if (btn.dataset.act === 'chart') openPage('chart', `productId=${encodeURIComponent(pid)}`);
-        else if (btn.dataset.act === 'buy') {
+        if (btn.dataset.act === 'prefer') {
+          const newPreferred = state.preferredProductId === pid ? null : pid;
+          sendMsg('SET_PREFERRED_PRODUCT', { groupName: state.groupName, productId: newPreferred }).then(() => {
+            state.preferredProductId = newPreferred;
+            renderCompareCards();
+            renderTable();
+            showToast(newPreferred ? '✅ 已设为首选购买入口' : '已取消首选');
+          });
+        } else if (btn.dataset.act === 'chart') {
+          openPage('chart', `productId=${encodeURIComponent(pid)}`);
+        } else if (btn.dataset.act === 'buy') {
           if (p.url) chrome.tabs ? chrome.tabs.create({ url: p.url }) : window.open(p.url);
           else showToast('无商品链接', 'warn');
         }
@@ -148,14 +223,18 @@ function renderTable() {
   const rows = state.products.map((p, idx) => {
     const color = LINE_COLORS[idx % LINE_COLORS.length];
     const isBest = state.bestProduct && p.id === state.bestProduct.id;
+    const isPreferred = state.preferredProductId === p.id;
     const delta = Number(p.highestPrice || p.currentPrice) - Number(p.lowestPrice || p.currentPrice);
     return `
-      <tr style="${idx % 2 === 0 ? 'background:#f8fafc;' : ''}">
+      <tr style="${idx % 2 === 0 ? 'background:#f8fafc;' : ''} ${isPreferred ? 'background:#fffbeb;' : ''}">
         <td style="padding:12px 14px;">
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>
             <div>
-              ${getPlatformBadge(p.platform)}
+              <div style="display:flex;align-items:center;gap:6px;">
+                ${getPlatformBadge(p.platform)}
+                ${isPreferred ? '<span style="display:inline-flex;align-items:center;gap:2px;padding:1px 6px;background:#fef3c7;color:#d97706;border-radius:10px;font-size:9.5px;font-weight:700;">⭐</span>' : ''}
+              </div>
               <div style="font-size:12.5px;font-weight:600;margin-top:4px;color:var(--text);">${escapeHtml(p.name.substring(0, 30))}${p.name.length > 30 ? '...' : ''}</div>
             </div>
           </div>
@@ -164,6 +243,7 @@ function renderTable() {
         <td style="padding:12px 14px;text-align:center;">
           <span style="font-size:15px;font-weight:800;color:${isBest ? '#10b981' : 'var(--primary)'};">¥${Number(p.currentPrice).toFixed(2)}</span>
           ${isBest ? '<div style="font-size:10px;color:#10b981;font-weight:700;margin-top:2px;">🏆 最低价</div>' : ''}
+          ${isPreferred ? '<div style="font-size:10px;color:#d97706;font-weight:700;margin-top:2px;">⭐ 首选</div>' : ''}
         </td>
         <td style="padding:12px 14px;text-align:center;font-size:12.5px;color:#10b981;font-weight:600;">¥${Number(p.lowestPrice || p.currentPrice).toFixed(2)}</td>
         <td style="padding:12px 14px;text-align:center;font-size:12.5px;color:#ef4444;font-weight:600;">¥${Number(p.highestPrice || p.currentPrice).toFixed(2)}</td>
@@ -172,9 +252,10 @@ function renderTable() {
         </td>
         <td style="padding:12px 14px;text-align:center;">${getPlanBadge(p.purchasePlan)}</td>
         <td style="padding:12px 14px;text-align:center;">
-          <div style="display:inline-flex;gap:6px;">
-            <button class="pca-btn primary btn-sm" style="padding:4px 10px;" data-tact="chart" data-pid="${escapeHtml(p.id)}">曲线</button>
-            <button class="pca-btn btn-sm" style="padding:4px 10px;" data-tact="buy" data-pid="${escapeHtml(p.id)}">购买</button>
+          <div style="display:inline-flex;gap:4px;flex-wrap:wrap;justify-content:center;">
+            <button class="pca-btn ${isPreferred ? 'primary' : ''} btn-sm" style="padding:4px 8px;font-size:11px;" data-tact="prefer" data-pid="${escapeHtml(p.id)}" title="${isPreferred ? '取消首选' : '设为首选'}">${isPreferred ? '⭐' : '☆'}</button>
+            <button class="pca-btn primary btn-sm" style="padding:4px 8px;font-size:11px;" data-tact="chart" data-pid="${escapeHtml(p.id)}">曲线</button>
+            <button class="pca-btn btn-sm" style="padding:4px 8px;font-size:11px;" data-tact="buy" data-pid="${escapeHtml(p.id)}">购买</button>
           </div>
         </td>
       </tr>
@@ -203,8 +284,17 @@ function renderTable() {
       const pid = b.dataset.pid;
       const p = state.products.find(x => x.id === pid);
       if (!p) return;
-      if (b.dataset.tact === 'chart') openPage('chart', `productId=${encodeURIComponent(pid)}`);
-      else if (b.dataset.tact === 'buy') {
+      if (b.dataset.tact === 'prefer') {
+        const newPreferred = state.preferredProductId === pid ? null : pid;
+        sendMsg('SET_PREFERRED_PRODUCT', { groupName: state.groupName, productId: newPreferred }).then(() => {
+          state.preferredProductId = newPreferred;
+          renderCompareCards();
+          renderTable();
+          showToast(newPreferred ? '✅ 已设为首选购买入口' : '已取消首选');
+        });
+      } else if (b.dataset.tact === 'chart') {
+        openPage('chart', `productId=${encodeURIComponent(pid)}`);
+      } else if (b.dataset.tact === 'buy') {
         if (p.url) chrome.tabs ? chrome.tabs.create({ url: p.url }) : window.open(p.url);
       }
     });

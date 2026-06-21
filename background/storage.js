@@ -6,6 +6,47 @@ const StorageAPI = {
   async saveProducts(list) {
     await chrome.storage.local.set({ products: list });
   },
+  async addCheckLog(log) {
+    const r = await chrome.storage.local.get('checkLogs');
+    const list = r.checkLogs || [];
+    list.unshift({ id: `log_${Date.now()}`, ...log, createdAt: Date.now() });
+    if (list.length > 50) list.length = 50;
+    await chrome.storage.local.set({ checkLogs: list });
+    return list[0];
+  },
+  async getCheckLogs(limit = 20) {
+    const r = await chrome.storage.local.get('checkLogs');
+    const list = r.checkLogs || [];
+    return limit ? list.slice(0, limit) : list;
+  },
+  async getLastCheckLog() {
+    const r = await chrome.storage.local.get('checkLogs');
+    const list = r.checkLogs || [];
+    return list[0] || null;
+  },
+  async getGroupPrefs() {
+    const r = await chrome.storage.local.get('groupPrefs');
+    return r.groupPrefs || {};
+  },
+  async saveGroupPrefs(prefs) {
+    await chrome.storage.local.set({ groupPrefs: prefs });
+  },
+  async setPreferredProduct(groupName, productId) {
+    const prefs = await this.getGroupPrefs();
+    prefs[groupName] = { ...(prefs[groupName] || {}), preferredProductId: productId };
+    await this.saveGroupPrefs(prefs);
+    return prefs;
+  },
+  async getGroupSort(groupName) {
+    const prefs = await this.getGroupPrefs();
+    return prefs[groupName]?.sortBy || 'currentPrice';
+  },
+  async setGroupSort(groupName, sortBy) {
+    const prefs = await this.getGroupPrefs();
+    prefs[groupName] = { ...(prefs[groupName] || {}), sortBy };
+    await this.saveGroupPrefs(prefs);
+    return prefs;
+  },
   async addProduct(product) {
     const list = await this.getProducts();
     const idx = list.findIndex(p => p.id === product.id);

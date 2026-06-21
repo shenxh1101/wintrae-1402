@@ -124,3 +124,70 @@ function deltaBadge(current, lowest, highest) {
     background:${bg}; font-variant-numeric: tabular-nums;">
     ${isDown ? '↓' : '↑'} ${Math.abs(delta).toFixed(1)}%</span>`;
 }
+
+async function getLastCheckLog() {
+  const r = await sendMsg('GET_LAST_CHECK_LOG');
+  return r.ok ? r.data : null;
+}
+
+async function loadAndRenderCheckInfo(containerId = 'checkInfo') {
+  try {
+    const log = await getLastCheckLog();
+    renderCheckInfo(log, containerId);
+  } catch (e) {
+    const el = document.getElementById(containerId);
+    if (el) el.innerHTML = '';
+  }
+}
+
+function renderCheckInfo(log, containerId = 'checkInfo') {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.className = 'check-info';
+  if (!log) {
+    el.innerHTML = '<span class="check-info-empty">🕐 暂无检测记录，运行一次检测后将显示在这里</span>';
+    return;
+  }
+  const time = formatDateTime(log.createdAt);
+  const sourceLabel = log.source === 'auto' ? '自动检测' : '手动检测';
+  let changesHtml = '';
+  if (log.changedProducts && log.changedProducts.length) {
+    const top3 = log.changedProducts.slice(0, 3);
+    changesHtml = '<div class="check-info-changes">';
+    changesHtml += top3.map(p => {
+      const plat = (PLATFORM_MAP[p.platform] || {}).label || p.platform;
+      const reason = p.reasons ? p.reasons.join('、') : '价格变化';
+      return `<div class="check-info-change-item">
+        <span class="check-info-change-dot"></span>
+        <span class="check-info-change-product">${plat} · ${escapeHtml(p.name.substring(0, 18))}${p.name.length > 18 ? '...' : ''}</span>
+        <span class="check-info-change-reason">${reason}</span>
+      </div>`;
+    }).join('');
+    if (log.changedProducts.length > 3) {
+      changesHtml += `<div style="font-size:10.5px;color:#94a3b8;text-align:center;padding-top:4px;">+${log.changedProducts.length - 3} 件商品有变化</div>`;
+    }
+    changesHtml += '</div>';
+  }
+  el.innerHTML = `
+    <div class="check-info-icon">🔍</div>
+    <div class="check-info-main">
+      <div class="check-info-title">最近${sourceLabel}</div>
+      <div class="check-info-time">${time}</div>
+    </div>
+    <div class="check-info-stats">
+      <div class="check-info-stat ci-v-checked">
+        <div class="check-info-stat-value">${log.checkedCount}</div>
+        <div class="check-info-stat-label">检测</div>
+      </div>
+      <div class="check-info-stat ci-v-changed">
+        <div class="check-info-stat-value">${log.changedCount}</div>
+        <div class="check-info-stat-label">变化</div>
+      </div>
+      <div class="check-info-stat ci-v-notified">
+        <div class="check-info-stat-value">${log.notifiedCount || 0}</div>
+        <div class="check-info-stat-label">提醒</div>
+      </div>
+    </div>
+    ${changesHtml}
+  `;
+}
