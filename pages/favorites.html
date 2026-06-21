@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品收藏 · 价格追踪助手</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" width="24" height="24">
+            <path d="M3 17 L9 11 L13 15 L21 6" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="21" cy="6" r="2.4" fill="white"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>价格追踪</h1>
+          <p>比价省钱小助手</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-nav="favorites">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 3h12a2 2 0 0 1 2 2v16l-8-5-8 5V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          商品收藏
+          <span class="badge-dot" id="navCount">0</span>
+        </a>
+        <a class="nav-item" data-nav="settings">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09c0 .4.26.75.66.9.05.01.1.03.15.05.04.02.07.04.1.07.03.04.05.08.06.13.02.05.03.11.03.17v.14a1.65 1.65 0 0 0 .5 1.54 2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          提醒设置
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <h4>💡 省钱小贴士</h4>
+        <p>设置目标提醒价，系统会在价格达到预期时第一时间通知你。</p>
+        <button id="checkNowBtn">立即检测价格</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title">
+          <h2>我的收藏</h2>
+          <p id="pageSubtitle">共 0 件商品 · 实时追踪价格波动</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" id="selectAllBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M7 12l3 3 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            全选
+          </button>
+          <button class="btn btn-secondary btn-sm" id="exportBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            导出清单
+          </button>
+          <button class="btn btn-primary btn-sm" id="newBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+            添加商品
+          </button>
+        </div>
+      </div>
+
+      <div class="stat-row" id="statRow"></div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <span class="filter-group-label">平台</span>
+          <div id="platformFilters" class="filter-group"></div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-group-label">品类</span>
+          <select class="input-field" id="categoryFilter" style="padding:7px 12px; font-size:12px;">
+            <option value="">全部品类</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <span class="filter-group-label">降价幅度</span>
+          <div id="dropFilters" class="filter-group"></div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-group-label">购买计划</span>
+          <div id="planFilters" class="filter-group"></div>
+        </div>
+        <div class="filter-search">
+          <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" id="searchInput" placeholder="搜索商品名称、店铺..." />
+        </div>
+      </div>
+
+      <div id="productGrid" class="product-grid"></div>
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-icon">🛍️</div>
+        <h3>还没有收藏任何商品</h3>
+        <p>去电商平台挑选心仪的商品，点击扩展图标一键收藏；或者手动添加一个试试。</p>
+        <button class="btn btn-primary" id="emptyAddBtn">
+          <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+          手动添加商品
+        </button>
+      </div>
+
+      <div class="batch-bar" id="batchBar">
+        <span class="batch-count">已选 <b id="batchCount">0</b> 件</span>
+        <button class="btn btn-sm btn-secondary" id="batchArchive">📦 批量归档</button>
+        <button class="btn btn-sm btn-secondary" id="batchExport">⬇️ 导出选中</button>
+        <button class="btn btn-sm btn-danger" id="batchDelete">🗑️ 删除</button>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-mask" id="productModal">
+    <div class="modal-box">
+      <h3 id="modalTitle">添加商品</h3>
+      <div class="form-row">
+        <label>商品名称 *</label>
+        <input type="text" id="mName" placeholder="商品完整名称">
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div class="form-row">
+          <label>当前价格 *</label>
+          <input type="number" id="mPrice" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-row">
+          <label>目标价</label>
+          <input type="number" id="mTarget" step="0.01" placeholder="期望购入价">
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div class="form-row">
+          <label>平台</label>
+          <select id="mPlatform">
+            <option value="jd">京东</option><option value="taobao">淘宝</option><option value="tmall">天猫</option>
+            <option value="pdd">拼多多</option><option value="suning">苏宁</option><option value="amazon">亚马逊</option>
+            <option value="mi">小米</option><option value="other">其他</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>购买计划</label>
+          <select id="mPlan">
+            <option value="want">💡 想买</option><option value="cart">🛒 已加购</option>
+            <option value="bought">✅ 已购买</option><option value="archived">📦 已归档</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>商品链接</label>
+        <input type="text" id="mUrl" placeholder="https://...">
+      </div>
+      <div class="form-row">
+        <label>店铺 / 品类</label>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <input type="text" id="mShop" placeholder="店铺名称">
+          <input type="text" id="mCategory" placeholder="品类如：手机数码">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>规格备注</label>
+        <textarea id="mNote" rows="2" placeholder="记录尺码、颜色、规格等..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="mCancel">取消</button>
+        <button class="btn btn-primary" id="mSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="lib/common.js"></script>
+  <script src="lib/exporter.js"></script>
+  <script src="favorites.js"></script>
+</body>
+</html>

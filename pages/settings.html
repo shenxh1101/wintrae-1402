@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>提醒设置 · 价格追踪助手</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" width="24" height="24">
+            <path d="M3 17 L9 11 L13 15 L21 6" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="21" cy="6" r="2.4" fill="white"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>价格追踪</h1>
+          <p>比价省钱小助手</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item" data-nav="favorites">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 3h12a2 2 0 0 1 2 2v16l-8-5-8 5V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          商品收藏
+        </a>
+        <a class="nav-item active" data-nav="settings">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          提醒设置
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <h4>⚙️ 个性化配置</h4>
+        <p>自定义提醒条件，不错过任何一次降价。</p>
+        <button id="saveAllBtn">保存所有更改</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title">
+          <h2>提醒与设置</h2>
+          <p>个性化你的比价提醒体验</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" id="exportAllBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            导出全部
+          </button>
+          <button class="btn btn-secondary btn-sm" id="testNotifBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            测试通知
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <div class="settings-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>检测与提醒阈值</h3>
+          <p>设置后立即生效</p>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>价格检测频率</h4>
+            <p>后台自动检测价格的间隔，越频繁越实时</p>
+          </div>
+          <div class="settings-control">
+            <select id="cfgInterval" class="input-field" style="min-width: 140px;">
+              <option value="1">每 1 小时</option>
+              <option value="3">每 3 小时</option>
+              <option value="6">每 6 小时</option>
+              <option value="12">每 12 小时</option>
+              <option value="24">每 24 小时</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>降价提醒阈值</h4>
+            <p>降幅达到多少百分比时触发通知</p>
+          </div>
+          <div class="settings-control slider-input">
+            <input type="range" id="cfgDrop" min="1" max="50" value="5">
+            <span class="val" id="cfgDropVal">5%</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>异常涨价提醒</h4>
+            <p>短期涨幅超过时标记并提醒，防止被「先涨后降」套路</p>
+          </div>
+          <div class="settings-control slider-input">
+            <input type="range" id="cfgSpike" min="5" max="50" value="15">
+            <span class="val" id="cfgSpikeVal">15%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <div class="settings-icon" style="background:#ede9fe;color:#6d28d9;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>导出与数据管理</h3>
+          <p>备份数据、清理重复商品</p>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>默认导出格式</h4>
+            <p>导出购物清单时使用的文件格式</p>
+          </div>
+          <div class="settings-control">
+            <select id="cfgFormat" class="input-field">
+              <option value="csv">CSV (Excel 可打开)</option>
+              <option value="json">JSON (完整备份)</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>重复商品合并</h4>
+            <p>扫描 URL 或名称相同的商品，智能合并为一条</p>
+          </div>
+          <div class="settings-control">
+            <button class="btn btn-secondary btn-sm" id="mergeBtn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><path d="M10 6.5h4 M6.5 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              开始合并
+            </button>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>归档已购买商品</h4>
+            <p>将状态为「已购买」的商品移入归档，清理列表</p>
+          </div>
+          <div class="settings-control">
+            <button class="btn btn-secondary btn-sm" id="archiveBoughtBtn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M21 8v13H3V8 M1 3h22v5H1z M10 12h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              一键归档
+            </button>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>清空所有数据</h4>
+            <p style="color:#ef4444;">危险操作：不可恢复，将删除所有收藏和价格历史</p>
+          </div>
+          <div class="settings-control">
+            <button class="btn btn-danger btn-sm" id="resetBtn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3 6h18 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              清空数据
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <div class="settings-icon" style="background:#dbeafe;color:#1d4ed8;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM3 22a9 9 0 0 1 18 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+          <h3>商品提醒配置</h3>
+          <p>为每个商品单独设置目标价和提醒选项</p>
+          <p id="productCount"></p>
+        </div>
+        <div class="setting-products-list" id="targetList"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="lib/common.js"></script>
+  <script src="lib/exporter.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

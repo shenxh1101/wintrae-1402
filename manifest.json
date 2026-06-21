@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "价格追踪 - 网购比价提醒助手",
+  "version": "1.0.0",
+  "description": "一键收藏商品，追踪历史价格曲线，降价提醒、补货通知、优惠券提示、购物清单导出",
+  "default_locale": "zh_CN",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.taobao.com/*",
+    "https://*.tmall.com/*",
+    "https://*.jd.com/*",
+    "https://*.yangkeduo.com/*",
+    "https://*.pinduoduo.com/*",
+    "https://*.suning.com/*",
+    "https://*.amazon.cn/*",
+    "https://*.mi.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "价格追踪助手",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.taobao.com/*",
+        "https://*.tmall.com/*",
+        "https://*.jd.com/*",
+        "https://*.yangkeduo.com/*",
+        "https://*.pinduoduo.com/*",
+        "https://*.suning.com/*",
+        "https://*.amazon.cn/*",
+        "https://*.mi.com/*"
+      ],
+      "js": ["content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "pages/favorites.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["pages/*.html", "pages/lib/*.js", "pages/css/*.css", "icons/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

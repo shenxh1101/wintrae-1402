@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>价格追踪助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="popup-header">
+    <div class="logo-wrap">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+          <path d="M3 17 L9 11 L13 15 L21 6" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="21" cy="6" r="2.2" fill="white"/>
+        </svg>
+      </div>
+      <div class="title-wrap">
+        <h1>价格追踪</h1>
+        <p id="subTitle">一键收藏 · 降价提醒</p>
+      </div>
+    </div>
+    <div class="nav-icons">
+      <button class="nav-btn" data-goto="favorites" title="收藏列表">
+        <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 3h12a2 2 0 0 1 2 2v16l-8-5-8 5V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="nav-btn" data-goto="settings" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.26.4.66.66 1.11.71.36.05.67.3.83.64.16.34.22.73.16 1.11a1.65 1.65 0 0 0 .5 1.54 2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0 1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="popup-body" id="popupBody">
+    <div id="extractLoader" class="loader hidden">
+      <div class="spinner"></div>
+      <p>正在识别商品信息...</p>
+    </div>
+
+    <section id="productForm" class="form-section">
+      <div class="form-row">
+        <label class="form-label">商品名称</label>
+        <div class="input-wrap">
+          <svg class="input-icon" viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M4 7h16M4 12h16M4 17h10" stroke="#64748b" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" id="inputName" placeholder="请输入或自动识别商品名称" maxlength="200">
+        </div>
+      </div>
+
+      <div class="form-row form-grid">
+        <div class="form-cell">
+          <label class="form-label">当前价格</label>
+          <div class="input-wrap">
+            <span class="input-prefix">¥</span>
+            <input type="number" id="inputPrice" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-cell">
+          <label class="form-label">平台</label>
+          <div class="input-wrap">
+            <select id="inputPlatform">
+              <option value="jd">京东</option>
+              <option value="taobao">淘宝</option>
+              <option value="tmall">天猫</option>
+              <option value="pdd">拼多多</option>
+              <option value="suning">苏宁</option>
+              <option value="amazon">亚马逊</option>
+              <option value="mi">小米</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row form-grid">
+        <div class="form-cell">
+          <label class="form-label">品类</label>
+          <div class="input-wrap">
+            <input type="text" id="inputCategory" placeholder="自动或手动分类" list="categoryList">
+            <datalist id="categoryList">
+              <option value="手机数码"><option value="数码耳机"><option value="数码阅读">
+              <option value="家电清洁"><option value="服装男装"><option value="服装女装">
+              <option value="食品零食"><option value="美妆护肤"><option value="鞋靴箱包"><option value="其他">
+            </datalist>
+          </div>
+        </div>
+        <div class="form-cell">
+          <label class="form-label">店铺</label>
+          <div class="input-wrap">
+            <input type="text" id="inputShop" placeholder="店铺名称">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="form-label">商品链接</label>
+        <div class="input-wrap">
+          <svg class="input-icon" viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#64748b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <input type="text" id="inputUrl" placeholder="https://...">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="flex-between">
+          <label class="form-label">规格标签</label>
+          <button class="link-btn" id="addSpecBtn">+ 添加规格</button>
+        </div>
+        <div class="tag-list" id="specList"></div>
+      </div>
+
+      <div class="form-row">
+        <label class="form-label">规格备注</label>
+        <textarea id="inputSpecNote" rows="2" placeholder="记录尺码、颜色偏好、购买原因等..."></textarea>
+      </div>
+
+      <div class="form-row form-grid">
+        <div class="form-cell">
+          <label class="form-label">目标提醒价</label>
+          <div class="input-wrap">
+            <span class="input-prefix">¥</span>
+            <input type="number" id="inputTarget" step="0.01" placeholder="期望购入价">
+          </div>
+        </div>
+        <div class="form-cell">
+          <label class="form-label">购买计划</label>
+          <div class="input-wrap">
+            <select id="inputPlan">
+              <option value="want">💡 想买</option>
+              <option value="cart">🛒 已加购</option>
+              <option value="bought">✅ 已购买</option>
+              <option value="archived">📦 已归档</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row notify-row">
+        <label class="check-item">
+          <input type="checkbox" id="chkPrice" checked>
+          <span>降价提醒</span>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="chkCoupon">
+          <span>优惠券提示</span>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="chkRestock">
+          <span>补货通知</span>
+        </label>
+      </div>
+    </section>
+
+    <div class="actions-row">
+      <button class="btn-secondary" id="manualFillBtn">
+        <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        从页面提取
+      </button>
+      <button class="btn-primary" id="saveBtn">
+        <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" stroke="white" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        保存商品
+      </button>
+    </div>
+
+    <section class="stats-section">
+      <h3>今日追踪概览</h3>
+      <div class="stats-grid">
+        <div class="stat-card stat-blue">
+          <p class="stat-value" id="statTotal">0</p>
+          <p class="stat-label">收藏总数</p>
+        </div>
+        <div class="stat-card stat-green">
+          <p class="stat-value" id="statDrop">0</p>
+          <p class="stat-label">降价中</p>
+        </div>
+        <div class="stat-card stat-amber">
+          <p class="stat-value" id="statHit">0</p>
+          <p class="stat-label">达目标价</p>
+        </div>
+        <div class="stat-card stat-purple">
+          <p class="stat-value" id="statAvg">0%</p>
+          <p class="stat-label">平均降幅</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
