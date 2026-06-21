@@ -28,6 +28,11 @@
           商品收藏
           <span class="badge-dot" id="navCount">0</span>
         </a>
+        <a class="nav-item" data-nav="notifications">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M15 17h5l-1.4-1.4A7 7 0 0 0 19 11V9a7 7 0 1 0-14 0v2a7 7 0 0 0 .4 4.6L4 17h5 M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          通知记录
+          <span class="nav-badge" id="navUnreadBadge" style="display:none;">0</span>
+        </a>
         <a class="nav-item" data-nav="settings">
           <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09c0 .4.26.75.66.9.05.01.1.03.15.05.04.02.07.04.1.07.03.04.05.08.06.13.02.05.03.11.03.17v.14a1.65 1.65 0 0 0 .5 1.54 2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
           提醒设置
@@ -167,6 +172,41 @@
       <div class="modal-actions">
         <button class="btn btn-ghost" id="mCancel">取消</button>
         <button class="btn btn-primary" id="mSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="groupModal" class="modal-mask" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>设置比价分组</h3>
+        <button class="modal-close" data-close="groupModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>当前商品</label>
+          <div id="gmProduct" style="padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid var(--border);font-size:12.5px;font-weight:600;"></div>
+        </div>
+        <div class="form-row">
+          <label>选择分组</label>
+          <div class="group-actions">
+            <select id="gmGroup" class="group-select">
+              <option value="">-- 不分组 --</option>
+            </select>
+            <input type="text" id="gmNewGroup" class="group-select" placeholder="或新建分组名..." style="flex:1.5;">
+            <button class="btn btn-secondary btn-sm" id="gmMakeGroup">用商品名</button>
+          </div>
+          <p style="font-size:11px;color:#94a3b8;margin-top:6px;">💡 相同分组的商品会在卡片上显示价格对比，点击「查看对比」进入组对比页</p>
+        </div>
+        <div class="form-row">
+          <label>现有分组</label>
+          <div id="gmGroupList" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-close="groupModal">取消</button>
+        <button class="btn btn-ghost" id="gmRemoveGroup">从分组移除</button>
+        <button class="btn btn-primary" id="gmSave">保存分组</button>
       </div>
     </div>
   </div>

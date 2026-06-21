@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>比价组对比 · 价格追踪助手</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="page-body">
+  <div class="app-layout group-page">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo" style="background:linear-gradient(135deg,#0d9488,#0891b2);">
+          <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><path d="M3 17 L9 11 L13 15 L21 6" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21" cy="6" r="2.3" fill="white"/></svg>
+        </div>
+        <div>
+          <h1>价格追踪</h1>
+          <p>省钱小助手 · 比价提醒</p>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" data-nav="favorites">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 3h12a2 2 0 0 1 2 2v16l-8-5-8 5V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>商品收藏</span>
+        </div>
+        <div class="nav-item" data-nav="notifications">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M15 17h5l-1.4-1.4A7 7 0 0 0 19 11V9a7 7 0 1 0-14 0v2a7 7 0 0 0 .4 4.6L4 17h5 M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>通知记录</span>
+        </div>
+        <div class="nav-item" data-nav="settings">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>提醒设置</span>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <h4>🏷️ 比价组说明</h4>
+        <p>把同款商品归到同一比价组，查看各平台当前价、历史低价，找出最划算的平台购买。</p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <button id="backBtn" class="back-link" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M19 12H5 M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            返回收藏
+          </button>
+          <h2 id="groupTitle">比价组对比</h2>
+          <p id="groupSubtitle" class="subtitle">--</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" id="refreshBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M23 4v6h-6 M1 20v-6h6 M3.5 9a9 9 0 0 1 14.8-3.5L23 10 M20.5 15a9 9 0 0 1-14.8 3.5L1 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            立即检测价格
+          </button>
+          <button class="btn btn-ghost btn-sm" id="addGroupBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            管理成员
+          </button>
+        </div>
+      </div>
+
+      <div class="stat-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
+        <div class="stat-card sc-green">
+          <span class="stat-label">成员数</span>
+          <span class="stat-value" id="statCount">0</span>
+          <span class="stat-change" id="statPlat">跨平台</span>
+        </div>
+        <div class="stat-card sc-teal">
+          <span class="stat-label">当前最低价</span>
+          <span class="stat-value" id="statLowest">¥0</span>
+          <span class="stat-change" id="statLowestPlat">--</span>
+        </div>
+        <div class="stat-card sc-blue">
+          <span class="stat-label">历史最低价</span>
+          <span class="stat-value" id="statHistLow">¥0</span>
+          <span class="stat-change" id="statHistLowPlat">--</span>
+        </div>
+        <div class="stat-card sc-amber">
+          <span class="stat-label">平均价</span>
+          <span class="stat-value" id="statAvg">¥0</span>
+          <span class="stat-change">当前</span>
+        </div>
+      </div>
+
+      <div id="compareSummary" class="compare-summary"></div>
+
+      <div id="chartArea" style="background:white;border-radius:16px;padding:20px;border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.03);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <h3 style="font-size:16px;font-weight:700;">📈 多平台价格对比曲线</h3>
+            <p style="font-size:12px;color:var(--text-3);margin-top:2px;">同一比价组下各平台历史价格走势对比</p>
+          </div>
+        </div>
+        <canvas id="groupChart" height="300" style="width:100%;display:block;"></canvas>
+        <div id="groupLegend" style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);"></div>
+      </div>
+
+      <div style="margin-top:24px;">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;">📋 比价明细</h3>
+        <div id="detailTable" style="background:white;border-radius:16px;overflow:hidden;border:1px solid var(--border);"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="lib/common.js"></script>
+  <script src="lib/chart.js"></script>
+  <script src="group.js"></script>
+</body>
+</html>

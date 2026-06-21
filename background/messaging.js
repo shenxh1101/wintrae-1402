@@ -62,6 +62,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const result = await self.checkAllPrices ? self.checkAllPrices() : { notifiedCount: 0 };
           sendResponse({ ok: true, data: result });
           break;
+        case 'GET_NOTIFICATIONS':
+          sendResponse({ ok: true, data: await (self.Notifier ? self.Notifier.getRecords() : []) });
+          break;
+        case 'MARK_NOTIF_READ':
+          if (self.Notifier) await self.Notifier.markRead(msg.id);
+          sendResponse({ ok: true });
+          break;
+        case 'MARK_NOTIF_ALL_READ':
+          if (self.Notifier) await self.Notifier.markAllRead();
+          sendResponse({ ok: true });
+          break;
+        case 'CLEAR_NOTIFICATIONS':
+          if (self.Notifier) await self.Notifier.clearRecords();
+          sendResponse({ ok: true });
+          break;
+        case 'GET_UNREAD_COUNT':
+          sendResponse({ ok: true, data: await (self.Notifier ? self.Notifier.unreadCount() : 0) });
+          break;
         case 'EXTRACT_FROM_PAGE': {
           const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
           if (!tab || !tab.id) { sendResponse({ ok: false, error: 'No active tab' }); return; }

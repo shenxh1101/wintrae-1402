@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>通知记录 · 价格追踪助手</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="page-body">
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo" style="background:linear-gradient(135deg,#0d9488,#0891b2);">
+          <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><path d="M3 17 L9 11 L13 15 L21 6" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21" cy="6" r="2.3" fill="white"/></svg>
+        </div>
+        <div>
+          <h1>价格追踪</h1>
+          <p>省钱小助手 · 比价提醒</p>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-item" data-nav="favorites">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 3h12a2 2 0 0 1 2 2v16l-8-5-8 5V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>商品收藏</span>
+        </div>
+        <div class="nav-item active" data-nav="notifications">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M15 17h5l-1.4-1.4A7 7 0 0 0 19 11V9a7 7 0 1 0-14 0v2a7 7 0 0 0 .4 4.6L4 17h5 M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>通知记录</span>
+          <span class="nav-badge" id="unreadBadge" style="display:none;">0</span>
+        </div>
+        <div class="nav-item" data-nav="settings">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>提醒设置</span>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <h4>💡 通知说明</h4>
+        <p>所有降价提醒、到价、补货、优惠券都会在这里记录，最多保留 200 条。</p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h2 id="pageTitle">通知记录</h2>
+          <p id="pageSubtitle" class="subtitle">查看所有提醒历史，点击记录跳转对应商品</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm" id="checkNowBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M23 4v6h-6 M1 20v-6h6 M3.5 9a9 9 0 0 1 14.8-3.5L23 10 M20.5 15a9 9 0 0 1-14.8 3.5L1 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            立即检测价格
+          </button>
+          <button class="btn btn-primary btn-sm" id="markAllReadBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            全部标为已读
+          </button>
+          <button class="btn btn-ghost btn-sm" id="clearAllBtn">
+            <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M3 6h18 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            清空记录
+          </button>
+        </div>
+      </div>
+
+      <div class="notif-stats">
+        <div class="stat-card sc-blue">
+          <span class="stat-label">总通知数</span>
+          <span class="stat-value" id="statTotal">0</span>
+          <span class="stat-change" id="statTotalDesc">--</span>
+        </div>
+        <div class="stat-card sc-green">
+          <span class="stat-label">降价提醒</span>
+          <span class="stat-value" id="statDrop">0</span>
+          <span class="stat-change" id="statDropDesc">📉</span>
+        </div>
+        <div class="stat-card sc-amber">
+          <span class="stat-label">到价提醒</span>
+          <span class="stat-value" id="statTarget">0</span>
+          <span class="stat-change" id="statTargetDesc">🎯</span>
+        </div>
+        <div class="stat-card sc-purple">
+          <span class="stat-label">未读通知</span>
+          <span class="stat-value" id="statUnread">0</span>
+          <span class="stat-change" id="statUnreadDesc">🔔</span>
+        </div>
+      </div>
+
+      <div class="filter-bar notif-filter">
+        <div class="filter-group" id="typeFilter">
+          <button class="filter-btn active" data-type="all">全部</button>
+          <button class="filter-btn" data-type="priceDrop">📉 降价</button>
+          <button class="filter-btn" data-type="targetReached">🎯 到价</button>
+          <button class="filter-btn" data-type="priceSpike">⚠️ 涨价</button>
+          <button class="filter-btn" data-type="restock">📦 补货</button>
+          <button class="filter-btn" data-type="coupon">🎟️ 优惠券</button>
+        </div>
+        <div class="filter-group">
+          <label class="filter-toggle">
+            <input type="checkbox" id="onlyUnread">
+            <span>只看未读</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="notifList" class="notif-list"></div>
+
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-icon">🔔</div>
+        <h3>暂无通知</h3>
+        <p>开始追踪商品后，降价、到价、补货等提醒会出现在这里</p>
+        <button class="btn btn-primary" id="emptyGotoFav">去收藏商品 →</button>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="lib/common.js"></script>
+  <script src="notifications.js"></script>
+</body>
+</html>

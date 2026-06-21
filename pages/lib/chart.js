@@ -243,5 +243,31 @@ const PriceChart = {
       } else onHover && onHover(null);
     });
     canvas.addEventListener('mouseleave', () => onHover && onHover(null));
+  },
+
+  attachGroupHover(canvas, config, onHover) {
+    const { products, histories, colors, x, y, pad, plotW, plotH, minPrice, maxPrice, W, H } = config;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      if (mx < pad.l || mx > W - pad.r || my < pad.t || my > H - pad.b) {
+        onHover && onHover(null);
+        return;
+      }
+      let best = null, bestDist = Infinity;
+      products.forEach((p, pIdx) => {
+        const hist = [...(histories[p.id] || [])].sort((a, b) => a.timestamp - b.timestamp);
+        hist.forEach((h) => {
+          const px = x(h.timestamp), py = y(h.price);
+          const dist = Math.sqrt((mx - px) ** 2 + (my - py) ** 2);
+          if (dist < bestDist) { bestDist = dist; best = { product: p, data: h, color: colors[pIdx % colors.length], x: px, y: py, rect }; }
+        });
+      });
+      if (best && bestDist < 28) onHover && onHover(best);
+      else onHover && onHover(null);
+    });
+    canvas.addEventListener('mouseleave', () => onHover && onHover(null));
   }
 };

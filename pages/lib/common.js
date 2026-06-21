@@ -31,6 +31,17 @@ function formatDate(ts) {
   return `${y}-${m}-${day}`;
 }
 
+function formatDateTime(ts) {
+  if (!ts) return '--';
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${day} ${h}:${min}`;
+}
+
 function daysBetween(a, b) {
   return Math.floor(Math.abs((b - a) / 86400000));
 }
@@ -94,7 +105,7 @@ function showToast(msg, type = 'success') {
 }
 
 function openPage(name, params = '') {
-  const m = { favorites: 'favorites.html', settings: 'settings.html', chart: 'chart.html' };
+  const m = { favorites: 'favorites.html', settings: 'settings.html', chart: 'chart.html', notifications: 'notifications.html', group: 'group.html' };
   const url = chrome.runtime.getURL('pages/' + (m[name] || m.favorites)) + (params ? `?${params}` : '');
   chrome.tabs ? chrome.tabs.create({ url }) : window.open(url, '_blank');
 }

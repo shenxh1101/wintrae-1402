@@ -1,11 +1,33 @@
 const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
 
+const DRAFT_KEY = 'price_tracker_popup_draft';
+
+function loadDraft() {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+function saveDraft(data) {
+  try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(data)); } catch (e) {}
+}
+function clearDraft() {
+  try { sessionStorage.removeItem(DRAFT_KEY); } catch (e) {}
+}
+
 const state = {
   extracted: null,
   specs: [],
   editingId: null
 };
+
+const draft = loadDraft();
+if (draft && Array.isArray(draft.specs)) {
+  state.specs = draft.specs;
+  if (draft.editingId) state.editingId = draft.editingId;
+}
 
 async function sendMessage(type, payload = {}) {
   return new Promise((resolve) => {
@@ -41,10 +63,12 @@ function renderSpecs() {
     `;
     tag.querySelector('.spec-del').addEventListener('click', (e) => {
       state.specs.splice(Number(e.target.dataset.idx), 1);
+      saveDraft({ specs: state.specs, editingId: state.editingId });
       renderSpecs();
     });
     tag.querySelector('.spec-note-input').addEventListener('input', (e) => {
       state.specs[Number(e.target.dataset.idx)].note = e.target.value;
+      saveDraft({ specs: state.specs, editingId: state.editingId });
     });
     list.appendChild(tag);
   };
@@ -59,6 +83,7 @@ function renderSpecs() {
     const val = input.value.trim();
     if (val && !state.specs.some(s => s.name === val)) {
       state.specs.push({ name: val, note: '' });
+      saveDraft({ specs: state.specs, editingId: state.editingId });
       renderSpecs();
     } else {
       input.value = '';
@@ -148,6 +173,7 @@ async function onSave() {
   btn.style.opacity = '1';
   if (r.ok) {
     toast('✓ 已保存，开始追踪价格');
+    clearDraft();
     setTimeout(updateStats, 300);
     setTimeout(() => {
       $('#inputName').value = '';
@@ -161,6 +187,7 @@ async function onSave() {
     }, 500);
   } else {
     toast('保存失败: ' + (r.error || '未知错误'), 'error');
+    saveDraft({ specs: state.specs, editingId: state.editingId });
   }
 }
 

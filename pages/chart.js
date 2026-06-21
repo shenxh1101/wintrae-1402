@@ -226,18 +226,18 @@ function renderSettings() {
 function attachActions() {
   $('#backLink').addEventListener('click', () => openPage('favorites'));
   $$('.nav-item').forEach(i => i.addEventListener('click', () => {
-    if (i.dataset.nav === 'favorites') openPage('favorites');
-    if (i.dataset.nav === 'settings') openPage('settings');
+    if (i.dataset.nav) openPage(i.dataset.nav);
   }));
   $('#refreshBtn').addEventListener('click', async () => {
-    showToast('🔄 正在刷新价格，请稍候...');
+    showToast('� 正在检测价格，请稍候...');
     const r = await sendMsg('TRIGGER_CHECK');
     await loadData();
     if (r.ok && r.data) {
+      const checked = r.data.checkedCount || 0;
       const notified = r.data.notifiedCount || 0;
-      showToast(notified > 0 ? `✅ 刷新完成，检测到 ${notified} 个变化` : '✅ 刷新完成，价格暂无变动');
+      showToast(`✅ 检测完成，共检测 ${checked} 件商品，${notified} 个价格变化提醒`);
     } else {
-      showToast('刷新完成', 'warn');
+      showToast('检测完成', 'warn');
     }
   });
   $('#openBuyBtn').addEventListener('click', () => {

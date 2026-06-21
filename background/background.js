@@ -153,29 +153,57 @@ async function checkAllPrices() {
             message: notifyMsg,
             priority: 2
           });
+          let recType = 'priceSpike';
+          let recTitle = '异常涨价提醒';
+          if (product.targetPrice && newPrice <= product.targetPrice) { recType = 'targetReached'; recTitle = '目标价已到达'; }
+          else if (deltaPct < 0) { recType = 'priceDrop'; recTitle = '商品降价'; }
+          self.Notifier && self.Notifier.addCustom({
+            type: recType,
+            productId: product.id,
+            productName: product.name,
+            title: recTitle,
+            message: notifyMsg.replace(/^[🎯📉⚠️]+ /, ''),
+            extra: { oldPrice, newPrice, deltaPct, targetPrice: product.targetPrice }
+          });
         }
       }
 
       if (!wasInStock && isInStock && product.restockNotify) {
         notifiedCount++;
+        const msg = `${product.name.substring(0, 20)} 已补货，快去看看吧`;
         showNotification(`restock_${product.id}`, {
           type: 'basic',
           iconUrl: '../icons/icon128.png',
           title: '📦 补货通知',
-          message: `${product.name.substring(0, 20)} 已补货，快去看看吧`,
+          message: msg,
           priority: 2
+        });
+        self.Notifier && self.Notifier.addCustom({
+          type: 'restock',
+          productId: product.id,
+          productName: product.name,
+          title: '补货通知',
+          message: msg
         });
       }
       product.inStock = isInStock;
 
       if (!hadCoupon && hasCoupon && product.couponNotify) {
         notifiedCount++;
+        const msg = `${product.name.substring(0, 20)} 有新的优惠券可以使用`;
         showNotification(`coupon_${product.id}`, {
           type: 'basic',
           iconUrl: '../icons/icon128.png',
           title: '🎟️ 有新优惠券',
-          message: `${product.name.substring(0, 20)} 有新的优惠券可以使用`,
+          message: msg,
           priority: 1
+        });
+        self.Notifier && self.Notifier.addCustom({
+          type: 'coupon',
+          productId: product.id,
+          productName: product.name,
+          title: '优惠券可用',
+          message: msg
         });
       }
       product.hasCoupon = hasCoupon;
@@ -379,6 +407,13 @@ async function initDemoData() {
       updatedAt: today - 20 * day
     }
   ];
+  const groupMap = {
+    'demo-1': '降噪耳机 AirPods Pro 2',
+    'demo-3': '戴森吸尘器 V12',
+    'demo-4': '戴森吸尘器 V12',
+    'demo-6': 'Kindle Paperwhite 5'
+  };
+  demoProducts.forEach(p => { if (groupMap[p.id]) p.compareGroup = groupMap[p.id]; });
   await chrome.storage.local.set({ products: demoProducts });
   for (const p of demoProducts) {
     const history = generateHistory(p);

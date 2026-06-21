@@ -188,7 +188,7 @@ function attachDragMerge() {
 function bindActions() {
   $$('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
-      if (item.dataset.nav === 'favorites') openPage('favorites');
+      if (item.dataset.nav && item.dataset.nav !== 'settings') openPage(item.dataset.nav);
     });
   });
   $('#saveAllBtn').addEventListener('click', async () => {

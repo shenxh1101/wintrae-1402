@@ -12,11 +12,38 @@ const state = {
   editingId: null
 };
 
+async function loadUnreadBadge() {
+  try {
+    const r = await sendMsg('GET_UNREAD_COUNT');
+    const count = r.ok ? r.data || 0 : 0;
+    const badge = $('#navUnreadBadge');
+    if (badge) {
+      if (count > 0) {
+        badge.style.display = 'inline-flex';
+        badge.textContent = count > 99 ? '99+' : count;
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+  } catch (e) {}
+}
+
 async function loadProducts() {
   const r = await sendMsg('GET_PRODUCTS');
   state.products = r.ok ? (r.data || []) : [];
   applyFilters();
   renderAll();
+  loadUnreadBadge();
+}
+
+function getAllGroups() {
+  const groups = new Set();
+  state.products.forEach(p => { if (p.compareGroup) groups.add(p.compareGroup); });
+  return Array.from(groups).sort();
+}
+
+function getGroupMembers(groupName) {
+  return state.products.filter(p => p.compareGroup === groupName);
 }
 
 function applyFilters() {
@@ -148,6 +175,25 @@ function renderGrid() {
     const isSelected = state.selected.has(p.id);
     const deltaBadgeHtml = deltaBadge(p.currentPrice, p.lowestPrice, p.highestPrice);
     const targetHit = p.targetPrice && p.currentPrice <= p.targetPrice;
+    const groupMembers = p.compareGroup ? getGroupMembers(p.compareGroup) : [];
+    const groupBest = groupMembers.length >= 2
+      ? groupMembers.reduce((best, x) => (!best || Number(x.currentPrice) < Number(best.currentPrice) ? x : best), null)
+      : null;
+    const compareStripHtml = groupMembers.length >= 2 ? `
+      <div class="compare-strip" onclick="event.stopPropagation(); openPage('group', 'name=${encodeURIComponent(p.compareGroup)}');">
+        ${groupMembers.slice(0, 5).map(m => `
+          <span class="compare-strip-item ${groupBest && m.id === groupBest.id ? 'cs-best' : ''}">
+            ${getPlatformBadge(m.platform)}
+            <span>¥${Number(m.currentPrice).toFixed(0)}</span>
+            ${groupBest && m.id === groupBest.id ? '<span>✓最省</span>' : ''}
+          </span>
+        `).join('')}
+        <span class="compare-strip-item" style="background:var(--primary-soft);color:var(--primary);border-color:var(--primary);font-weight:700;">
+          查看对比 →
+        </span>
+      </div>
+    ` : '';
+    const groupBadgeHtml = p.compareGroup ? `<span class="group-badge">🏷️ ${escapeHtml(p.compareGroup)}</span>` : '';
     return `
       <div class="product-card ${isSelected ? 'selected' : ''}" data-id="${escapeHtml(p.id)}">
         <label class="product-card-check">
@@ -157,10 +203,13 @@ function renderGrid() {
           ${p.imageUrl ? `<img src="${escapeHtml(p.imageUrl)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">` : ''}
           <div class="no-img" style="${p.imageUrl ? 'display:none;' : ''}">${categoryEmoji(p.category)}</div>
           <div class="product-card-top">
-            <div class="top-badges">
-              ${getPlatformBadge(p.platform)}
-              ${targetHit ? `<span style="padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:700;background:#fef3c7;color:#d97706;">🎯 到价</span>` : ''}
-              ${deltaBadgeHtml}
+            <div class="product-card-top-left">
+              <div class="top-badges">
+                ${getPlatformBadge(p.platform)}
+                ${targetHit ? `<span style="padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:700;background:#fef3c7;color:#d97706;">🎯 到价</span>` : ''}
+                ${deltaBadgeHtml}
+              </div>
+              ${groupBadgeHtml}
             </div>
             <div class="card-fav" title="收藏">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="${p.purchasePlan === 'archived' ? 'none' : '#ef4444'}"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" stroke="#ef4444" stroke-width="1.6" stroke-linejoin="round"/></svg>
@@ -194,6 +243,7 @@ function renderGrid() {
               </div>
             ` : ''}
           ` : (p.specNote ? `<div style="font-size:11px;color:#64748b;line-height:1.5;background:#f8fafc;padding:6px 8px;border-radius:6px;">📝 ${escapeHtml(p.specNote.substring(0, 50))}</div>` : '')}
+          ${compareStripHtml}
           <div class="product-price-row">
             <div class="price-main">
               <span class="price-current"><span class="currency">¥</span>${(p.currentPrice || 0).toFixed(2)}</span>
@@ -215,6 +265,10 @@ function renderGrid() {
           <button class="pca-btn" data-action="open" data-id="${escapeHtml(p.id)}">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14 21 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             购买
+          </button>
+          <button class="pca-btn" data-action="group" data-id="${escapeHtml(p.id)}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3 7h13a2 2 0 0 1 2 2v11l-6.5-4-6.5 4V9a2 2 0 0 1-2-2z M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v13l-2-1.3 M11 11h10" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            分组
           </button>
           <button class="pca-btn danger" data-action="delete" data-id="${escapeHtml(p.id)}">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3 6h18 M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -245,6 +299,10 @@ function renderGrid() {
             else showToast('删除失败：' + (r.error || ''), 'error');
           }
           break;
+        case 'group':
+          openGroupModal(id);
+          break;
+      }
       }
     });
   });
@@ -345,7 +403,8 @@ function attachTopActions() {
 
   $$('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
-      if (item.dataset.nav === 'settings') openPage('settings');
+      const nav = item.dataset.nav;
+      if (nav && nav !== 'favorites') openPage(nav);
     });
   });
 }
@@ -423,9 +482,84 @@ function attachModal() {
   $('#productModal').addEventListener('click', (e) => { if (e.target.id === 'productModal') closeModal(); });
 }
 
+function openGroupModal(productId) {
+  const p = state.products.find(x => x.id === productId);
+  if (!p) return;
+  state._groupingId = productId;
+  $('#gmProduct').innerHTML = `
+    ${getPlatformBadge(p.platform)}
+    <span style="margin-left:6px;">${escapeHtml(p.name.substring(0, 40))}${p.name.length > 40 ? '...' : ''}</span>
+    <span style="margin-left:auto;color:#0d9488;font-weight:700;">¥${Number(p.currentPrice).toFixed(2)}</span>
+  `;
+  const groups = getAllGroups();
+  const curGroup = p.compareGroup || '';
+  $('#gmGroup').innerHTML = '<option value="">-- 不分组 --</option>' +
+    groups.map(g => `<option value="${escapeHtml(g)}" ${g === curGroup ? 'selected' : ''}>${escapeHtml(g)}</option>`).join('');
+  $('#gmNewGroup').value = '';
+  $('#gmGroupList').innerHTML = groups.length
+    ? groups.map(g => {
+        const cnt = state.products.filter(x => x.compareGroup === g).length;
+        return `<span class="group-badge" title="${cnt} 件商品" style="cursor:pointer;padding:4px 10px;">🏷️ ${escapeHtml(g)} · ${cnt}件</span>`;
+      }).join('')
+    : '<span style="font-size:11.5px;color:#94a3b8;">暂无分组，可在右侧新建</span>';
+  $('#gmGroupList').querySelectorAll('.group-badge').forEach(b => {
+    b.addEventListener('click', () => {
+      const name = b.textContent.replace(/^🏷️\s*/, '').replace(/ · \d+件$/, '');
+      $('#gmGroup').value = name;
+    });
+  });
+  $('#groupModal').classList.add('show');
+  $('#groupModal').removeAttribute('hidden');
+}
+
+function closeGroupModal() {
+  $('#groupModal').classList.remove('show');
+  $('#groupModal').setAttribute('hidden', '');
+  state._groupingId = null;
+}
+
+async function saveGroup() {
+  const id = state._groupingId;
+  if (!id) return;
+  const newName = $('#gmNewGroup').value.trim();
+  const selName = $('#gmGroup').value.trim();
+  const groupName = newName || selName || '';
+  const r = await sendMsg('UPDATE_PRODUCT', { id, payload: { compareGroup: groupName } });
+  if (r.ok) {
+    showToast(groupName ? `✅ 已加入分组「${groupName}」` : '已移出分组');
+    closeGroupModal();
+    loadProducts();
+  } else {
+    showToast('保存失败：' + (r.error || ''), 'error');
+  }
+}
+
+async function removeGroup() {
+  const id = state._groupingId;
+  if (!id) return;
+  const r = await sendMsg('UPDATE_PRODUCT', { id, payload: { compareGroup: '' } });
+  if (r.ok) {
+    showToast('已从分组中移除');
+    closeGroupModal();
+    loadProducts();
+  }
+}
+
+function attachGroupModal() {
+  $$('[data-close="groupModal"]').forEach(b => b.addEventListener('click', closeGroupModal));
+  $('#groupModal').addEventListener('click', (e) => { if (e.target.id === 'groupModal') closeGroupModal(); });
+  $('#gmSave').addEventListener('click', saveGroup);
+  $('#gmRemoveGroup').addEventListener('click', removeGroup);
+  $('#gmMakeGroup').addEventListener('click', () => {
+    const p = state.products.find(x => x.id === state._groupingId);
+    if (p) $('#gmNewGroup').value = p.name.substring(0, 15);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   attachFilters();
   attachTopActions();
   attachModal();
+  attachGroupModal();
   loadProducts();
 });

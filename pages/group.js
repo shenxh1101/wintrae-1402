@@ -1,0 +1,388 @@
+const state = {
+  groupName: '',
+  products: [],
+  histories: {},
+  bestProduct: null,
+  avgPrice: 0
+};
+
+const LINE_COLORS = ['#0d9488', '#0891b2', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981', '#6366f1'];
+
+function parseParams() {
+  const p = new URLSearchParams(location.search);
+  state.groupName = p.get('name') || '';
+  return state.groupName;
+}
+
+async function loadData() {
+  const name = parseParams();
+  if (!name) {
+    $('#groupTitle').textContent = '未选择比价组';
+    $('#groupSubtitle').textContent = '请从收藏页选择一个比价组进入';
+    return;
+  }
+  $('#groupTitle').textContent = `🏷️ ${name}`;
+  const r = await sendMsg('GET_PRODUCTS');
+  const all = r.ok ? r.data || [] : [];
+  state.products = all.filter(p => p.compareGroup === name);
+  state.products.sort((a, b) => Number(a.currentPrice) - Number(b.currentPrice));
+  if (!state.products.length) {
+    $('#groupSubtitle').textContent = '这个比价组暂无商品';
+    renderEmpty();
+    return;
+  }
+  for (const p of state.products) {
+    const hr = await sendMsg('GET_HISTORY', { productId: p.id });
+    state.histories[p.id] = hr.ok ? (hr.data || []) : [];
+  }
+  state.bestProduct = state.products[0];
+  state.avgPrice = state.products.reduce((s, p) => s + Number(p.currentPrice), 0) / state.products.length;
+  const platSet = new Set(state.products.map(p => p.platform));
+  $('#groupSubtitle').textContent = `共 ${state.products.length} 件商品 · ${platSet.size} 个平台 · 最低价 ¥${Number(state.bestProduct.currentPrice).toFixed(2)}`;
+  renderStats();
+  renderCompareCards();
+  renderTable();
+  renderLegend();
+  renderGroupChart();
+}
+
+function renderEmpty() {
+  $('#compareSummary').innerHTML = '';
+  $('#chartArea').style.display = 'none';
+  $('#detailTable').innerHTML = '';
+}
+
+function renderStats() {
+  $('#statCount').textContent = state.products.length;
+  const plats = Array.from(new Set(state.products.map(p => p.platform))).map(k => (PLATFORM_MAP[k] || {}).label || k);
+  $('#statPlat').textContent = plats.join(' · ');
+  $('#statLowest').textContent = '¥' + Number(state.bestProduct.currentPrice).toFixed(2);
+  $('#statLowestPlat').textContent = '在 ' + ((PLATFORM_MAP[state.bestProduct.platform] || {}).label || state.bestProduct.platform);
+  const histLowProduct = state.products.reduce((best, p) => {
+    if (!p.lowestPrice) return best;
+    if (!best) return p;
+    return Number(p.lowestPrice) < Number(best.lowestPrice) ? p : best;
+  }, null);
+  if (histLowProduct) {
+    $('#statHistLow').textContent = '¥' + Number(histLowProduct.lowestPrice).toFixed(2);
+    $('#statHistLowPlat').textContent = '在 ' + ((PLATFORM_MAP[histLowProduct.platform] || {}).label || histLowProduct.platform);
+  }
+  $('#statAvg').textContent = '¥' + state.avgPrice.toFixed(2);
+}
+
+function renderCompareCards() {
+  $('#compareSummary').innerHTML = state.products.map((p, idx) => {
+    const isBest = state.bestProduct && p.id === state.bestProduct.id;
+    const diff = Number(p.currentPrice) - Number(state.bestProduct.currentPrice);
+    const savePct = state.bestProduct && Number(state.bestProduct.currentPrice) > 0
+      ? ((Number(p.currentPrice) - Number(state.bestProduct.currentPrice)) / Number(state.bestProduct.currentPrice) * 100)
+      : 0;
+    return `
+      <div class="compare-item ${isBest ? 'is-best' : ''}" data-pid="${escapeHtml(p.id)}">
+        <div class="ci-head">
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            ${getPlatformBadge(p.platform)}
+          </div>
+        </div>
+        <div class="ci-name">${escapeHtml(p.name)}</div>
+        <div class="ci-shop">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none"><path d="M3 9l1-5h16l1 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z M3 9h18M9 21v-5h6v5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          ${escapeHtml(p.shop || '未知店铺')}
+        </div>
+        <div class="ci-price-row">
+          <span class="ci-cur-price">¥${Number(p.currentPrice).toFixed(2)}</span>
+          ${p.lowestPrice ? `<span class="ci-low-price">历史最低 ¥${Number(p.lowestPrice).toFixed(2)}</span>` : ''}
+        </div>
+        <div class="ci-vs">
+          ${p.targetPrice ? `<div><span>🎯 目标价</span>¥${Number(p.targetPrice).toFixed(2)} ${p.currentPrice <= p.targetPrice ? '<b style="color:#10b981;">✓ 已达</b>' : ''}</div>` : ''}
+          <div><span>📊 历史最高</span>¥${Number(p.highestPrice || p.currentPrice).toFixed(2)}</div>
+          ${!isBest && diff > 0 ? `<div><span>💸 贵了</span><b style="color:#ef4444;">¥${diff.toFixed(2)} (${savePct.toFixed(1)}%)</b></div>` : ''}
+          ${isBest ? `<div><span>🏆</span><b style="color:#10b981;">比均价便宜 ¥${(state.avgPrice - Number(p.currentPrice)).toFixed(2)}</b></div>` : ''}
+        </div>
+        <div class="ci-btn-row">
+          <button class="btn btn-primary btn-sm ci-btn" data-act="chart">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none"><path d="M3 3v18h18 M7 14l4-4 4 4 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            价格曲线
+          </button>
+          <button class="btn btn-ghost btn-sm ci-btn" data-act="buy">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14 21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            去购买
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  $$('#compareSummary .compare-item').forEach(card => {
+    card.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-act]');
+      const pid = card.dataset.pid;
+      const p = state.products.find(x => x.id === pid);
+      if (!p) return;
+      if (btn) {
+        e.stopPropagation();
+        if (btn.dataset.act === 'chart') openPage('chart', `productId=${encodeURIComponent(pid)}`);
+        else if (btn.dataset.act === 'buy') {
+          if (p.url) chrome.tabs ? chrome.tabs.create({ url: p.url }) : window.open(p.url);
+          else showToast('无商品链接', 'warn');
+        }
+      } else {
+        openPage('chart', `productId=${encodeURIComponent(pid)}`);
+      }
+    });
+  });
+}
+
+function renderLegend() {
+  $('#groupLegend').innerHTML = state.products.map((p, idx) => {
+    const color = LINE_COLORS[idx % LINE_COLORS.length];
+    return `
+      <div style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--text-2);font-weight:500;">
+        <span style="display:inline-block;width:22px;height:3px;border-radius:3px;background:${color};"></span>
+        ${escapeHtml((PLATFORM_MAP[p.platform] || {}).label || p.platform)} · ${escapeHtml(p.name.substring(0, 14))}${p.name.length > 14 ? '...' : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTable() {
+  const rows = state.products.map((p, idx) => {
+    const color = LINE_COLORS[idx % LINE_COLORS.length];
+    const isBest = state.bestProduct && p.id === state.bestProduct.id;
+    const delta = Number(p.highestPrice || p.currentPrice) - Number(p.lowestPrice || p.currentPrice);
+    return `
+      <tr style="${idx % 2 === 0 ? 'background:#f8fafc;' : ''}">
+        <td style="padding:12px 14px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+            <div>
+              ${getPlatformBadge(p.platform)}
+              <div style="font-size:12.5px;font-weight:600;margin-top:4px;color:var(--text);">${escapeHtml(p.name.substring(0, 30))}${p.name.length > 30 ? '...' : ''}</div>
+            </div>
+          </div>
+        </td>
+        <td style="padding:12px 14px;text-align:center;font-size:13px;color:var(--text-2);">${escapeHtml(p.shop || '-')}</td>
+        <td style="padding:12px 14px;text-align:center;">
+          <span style="font-size:15px;font-weight:800;color:${isBest ? '#10b981' : 'var(--primary)'};">¥${Number(p.currentPrice).toFixed(2)}</span>
+          ${isBest ? '<div style="font-size:10px;color:#10b981;font-weight:700;margin-top:2px;">🏆 最低价</div>' : ''}
+        </td>
+        <td style="padding:12px 14px;text-align:center;font-size:12.5px;color:#10b981;font-weight:600;">¥${Number(p.lowestPrice || p.currentPrice).toFixed(2)}</td>
+        <td style="padding:12px 14px;text-align:center;font-size:12.5px;color:#ef4444;font-weight:600;">¥${Number(p.highestPrice || p.currentPrice).toFixed(2)}</td>
+        <td style="padding:12px 14px;text-align:center;font-size:12.5px;color:var(--text-2);font-weight:600;">
+          ${delta > 0 ? `¥${delta.toFixed(2)} (${(delta / Number(p.highestPrice || p.currentPrice) * 100).toFixed(1)}%)` : '-'}
+        </td>
+        <td style="padding:12px 14px;text-align:center;">${getPlanBadge(p.purchasePlan)}</td>
+        <td style="padding:12px 14px;text-align:center;">
+          <div style="display:inline-flex;gap:6px;">
+            <button class="pca-btn primary btn-sm" style="padding:4px 10px;" data-tact="chart" data-pid="${escapeHtml(p.id)}">曲线</button>
+            <button class="pca-btn btn-sm" style="padding:4px 10px;" data-tact="buy" data-pid="${escapeHtml(p.id)}">购买</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  $('#detailTable').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:linear-gradient(135deg,#f0fdfa,#f0f9ff);">
+          <th style="text-align:left;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">商品</th>
+          <th style="text-align:center;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">店铺</th>
+          <th style="text-align:center;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">当前价</th>
+          <th style="text-align:center;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">历史最低</th>
+          <th style="text-align:center;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">历史最高</th>
+          <th style="text-align:center;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">涨跌幅度</th>
+          <th style="text-align:center;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">状态</th>
+          <th style="text-align:center;padding:12px 14px;font-size:11.5px;color:var(--text-2);font-weight:600;letter-spacing:.3px;">操作</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+  $$('#detailTable [data-tact]').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pid = b.dataset.pid;
+      const p = state.products.find(x => x.id === pid);
+      if (!p) return;
+      if (b.dataset.tact === 'chart') openPage('chart', `productId=${encodeURIComponent(pid)}`);
+      else if (b.dataset.tact === 'buy') {
+        if (p.url) chrome.tabs ? chrome.tabs.create({ url: p.url }) : window.open(p.url);
+      }
+    });
+  });
+}
+
+function renderGroupChart() {
+  const canvas = document.getElementById('groupChart');
+  if (!canvas || !state.products.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 300 * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = rect.width;
+  const H = 300;
+  const pad = { l: 52, r: 20, t: 24, b: 40 };
+  const plotW = W - pad.l - pad.r;
+  const plotH = H - pad.t - pad.b;
+
+  const timestamps = new Set();
+  state.products.forEach(p => (state.histories[p.id] || []).forEach(h => timestamps.add(h.timestamp)));
+  const tsSorted = Array.from(timestamps).sort((a, b) => a - b);
+  if (tsSorted.length < 2) {
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText('历史数据不足，无法绘制对比曲线', W / 2, H / 2);
+    return;
+  }
+
+  let minPrice = Infinity, maxPrice = -Infinity;
+  state.products.forEach(p => {
+    const hist = state.histories[p.id] || [];
+    hist.forEach(h => { minPrice = Math.min(minPrice, h.price); maxPrice = Math.max(maxPrice, h.price); });
+  });
+  state.products.forEach(p => {
+    minPrice = Math.min(minPrice, Number(p.lowestPrice || p.currentPrice));
+    maxPrice = Math.max(maxPrice, Number(p.highestPrice || p.currentPrice));
+  });
+  if (!isFinite(minPrice)) { minPrice = 0; maxPrice = 100; }
+  const pricePad = (maxPrice - minPrice) * 0.08 || 1;
+  minPrice -= pricePad;
+  maxPrice += pricePad;
+
+  const x = (ts) => pad.l + ((ts - tsSorted[0]) / (tsSorted[tsSorted.length - 1] - tsSorted[0])) * plotW;
+  const y = (pr) => pad.t + plotH - ((pr - minPrice) / (maxPrice - minPrice)) * plotH;
+
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '11px -apple-system, system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  const ySteps = 5;
+  for (let i = 0; i <= ySteps; i++) {
+    const price = minPrice + (i / ySteps) * (maxPrice - minPrice);
+    const py = y(price);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, py);
+    ctx.lineTo(W - pad.r, py);
+    ctx.stroke();
+    ctx.fillText('¥' + price.toFixed(0), pad.l - 8, py + 3);
+  }
+  ctx.textAlign = 'center';
+  const xCount = Math.min(6, tsSorted.length);
+  for (let i = 0; i < xCount; i++) {
+    const idx = Math.floor((i / (xCount - 1)) * (tsSorted.length - 1));
+    const ts = tsSorted[idx];
+    const px = x(ts);
+    ctx.beginPath();
+    ctx.moveTo(px, pad.t);
+    ctx.lineTo(px, H - pad.b);
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.stroke();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(formatDate(ts), px, H - pad.b + 18);
+  }
+
+  state.products.forEach((p, idx) => {
+    const color = LINE_COLORS[idx % LINE_COLORS.length];
+    const hist = [...(state.histories[p.id] || [])].sort((a, b) => a.timestamp - b.timestamp);
+    if (!hist.length) return;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    hist.forEach((h, i) => {
+      const px = x(h.timestamp);
+      const py = y(h.price);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    const last = hist[hist.length - 1];
+    ctx.beginPath();
+    ctx.arc(x(last.timestamp), y(last.price), 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`¥${Number(last.price).toFixed(0)}`, x(last.timestamp) + 8, y(last.price) + 3);
+  });
+
+  let hoverCard = document.getElementById('groupHoverCard');
+  if (!hoverCard) {
+    hoverCard = document.createElement('div');
+    hoverCard.id = 'groupHoverCard';
+    hoverCard.style.cssText = 'position:absolute;pointer-events:none;z-index:50;opacity:0;transition:opacity .15s;background:#0f172a;color:#f8fafc;border-radius:10px;padding:10px 13px;font-size:12px;box-shadow:0 8px 24px rgba(15,23,42,.25);min-width:170px;line-height:1.5;';
+    canvas.parentElement.style.position = 'relative';
+    canvas.parentElement.appendChild(hoverCard);
+  }
+
+  PriceChart.attachGroupHover(canvas, {
+    products: state.products,
+    histories: state.histories,
+    colors: LINE_COLORS,
+    x, y,
+    pad, plotW, plotH,
+    minPrice, maxPrice,
+    W, H
+  }, (info) => {
+    if (!info) { hoverCard.style.opacity = '0'; return; }
+    const { product, data, color, x: hx, y: hy } = info;
+    const platLabel = (PLATFORM_MAP[product.platform] || {}).label || product.platform;
+    hoverCard.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};"></span>
+        <b style="font-weight:700;">${escapeHtml(platLabel)}</b>
+      </div>
+      <div style="color:#cbd5e1;font-size:11px;margin-bottom:4px;">📅 ${formatDate(data.timestamp)}</div>
+      <div style="font-size:16px;font-weight:800;color:#f1f5f9;">¥${Number(data.price).toFixed(2)}</div>
+      <div style="color:#94a3b8;font-size:11px;margin-top:4px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(product.name)}</div>
+    `;
+    const cardRect = hoverCard.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    let left = hx + 14;
+    let top = hy - 20;
+    if (left + 200 > W) left = hx - 200;
+    if (top < 0) top = 8;
+    if (top + 90 > H) top = H - 90;
+    hoverCard.style.left = left + 'px';
+    hoverCard.style.top = top + 'px';
+    hoverCard.style.opacity = '1';
+  });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadData();
+  $('#backBtn').addEventListener('click', () => openPage('favorites'));
+  $('#addGroupBtn').addEventListener('click', () => openPage('favorites'));
+  $('#refreshBtn').addEventListener('click', async () => {
+    showToast('🔍 正在检测价格，请稍候...');
+    const r = await sendMsg('TRIGGER_CHECK');
+    setTimeout(async () => {
+      await loadData();
+      if (r.ok && r.data) {
+        const checked = r.data.checkedCount || 0;
+        const notified = r.data.notifiedCount || 0;
+        showToast(`✅ 检测完成，共检测 ${checked} 件商品，${notified} 个变化提醒`);
+      }
+    }, 400);
+  });
+  $$('.nav-item').forEach(i => {
+    i.addEventListener('click', () => {
+      if (i.dataset.nav) openPage(i.dataset.nav);
+    });
+  });
+  window.addEventListener('resize', () => {
+    if (state.products.length) renderGroupChart();
+  });
+});
